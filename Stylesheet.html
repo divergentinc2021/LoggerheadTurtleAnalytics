@@ -95,19 +95,16 @@
 
   .header-top-row {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
-    padding: 10px 0 6px;
+    padding: 16px 0 6px;
   }
 
-  .header-content {
-    max-width: 1400px;
-    margin: 0 auto;
+  .header-nav {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-xl);
-    padding-bottom: 12px;
+    justify-content: flex-start;
+    gap: var(--space-sm);
+    padding-bottom: 7px;
   }
 
   .logo-container {
@@ -142,11 +139,6 @@
     height: 80px;
     width: auto;
     padding: 4px 0;
-  }
-
-  .header-nav {
-    display: flex;
-    gap: var(--space-sm);
   }
 
   .nav-item {
@@ -240,7 +232,7 @@
     padding: 0 200px;
     display: flex;
     align-items: center;
-    margin-top: 140px; /* offset for fixed header */
+    margin-top: 158px; /* offset for fixed header */
   }
 
   .nav-strip-content {
@@ -300,7 +292,7 @@
   .dashboard-hero {
     background: var(--gradient-card);
     border-bottom: 1px solid var(--border-light);
-    padding: var(--space-xl) var(--space-xl);
+    padding: var(--space-xl) 200px;
     margin-top: 0; /* nav strip is no longer fixed, flows naturally */
   }
 
@@ -453,7 +445,7 @@
   .main-content {
     max-width: 1400px;
     margin: 0 auto;
-    padding: var(--space-xl);
+    padding: var(--space-xl) 200px;
   }
 
   /* ========================================
@@ -999,6 +991,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
+    padding-top: 10px;
   }
 
   .footer-links h4 {
@@ -1033,6 +1026,7 @@
   .footer-info {
     justify-self: end;
     padding-right: var(--space-xl);
+    padding-top: 10px;
   }
 
   .footer-info p {
@@ -1275,6 +1269,14 @@
       padding-right: var(--space-xl);
     }
     .footer {
+      padding-left: var(--space-xl);
+      padding-right: var(--space-xl);
+    }
+    .dashboard-hero {
+      padding-left: var(--space-xl);
+      padding-right: var(--space-xl);
+    }
+    .main-content {
       padding-left: var(--space-xl);
       padding-right: var(--space-xl);
     }
