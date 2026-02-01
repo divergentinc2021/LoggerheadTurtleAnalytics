@@ -535,10 +535,14 @@
 
     const newBar = document.getElementById('acqNewUserBar');
     const retBar = document.getElementById('acqReturnBar');
-    newBar.style.width = data.newUserPct + '%';
-    retBar.style.width = data.returningUserPct + '%';
-    newBar.querySelector('span').textContent = 'New ' + data.newUserPct + '%';
-    retBar.querySelector('span').textContent = 'Returning ' + data.returningUserPct + '%';
+    var newPct = Math.max(data.newUserPct, 0);
+    var retPct = Math.max(data.returningUserPct, 0);
+
+    // Ensure minimum visible width when non-zero, hide text when too small
+    newBar.style.width = newPct > 0 ? Math.max(newPct, 5) + '%' : '0%';
+    retBar.style.width = retPct > 0 ? Math.max(retPct, 5) + '%' : '0%';
+    newBar.querySelector('span').textContent = newPct >= 15 ? 'New ' + newPct + '%' : (newPct > 0 ? newPct + '%' : '');
+    retBar.querySelector('span').textContent = retPct >= 15 ? 'Ret ' + retPct + '%' : (retPct > 0 ? retPct + '%' : '');
   }
 
   // ========================================
