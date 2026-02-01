@@ -1,0 +1,674 @@
+<script>
+  // ========================================
+  // UWC Innovation Hub - Analytics Dashboard
+  // Modern Chart.js Configuration
+  // ========================================
+
+  // Chart instances
+  let timeSeriesChart = null;
+  let performanceChart = null;
+  let activityChart = null;
+  let trafficChart = null;
+  let devicesChart = null;
+
+  // Current period
+  let currentPeriod = 'WEEKLY';
+  let totalUsers = 0;
+
+  // UWC Brand color palette
+  const colors = {
+    primary: '#003366',      // UWC Blue
+    primaryLight: 'rgba(0, 51, 102, 0.1)',
+    teal: '#00C9A7',
+    tealLight: 'rgba(0, 201, 167, 0.15)',
+    gold: '#C4A000',         // UWC Gold
+    goldLight: 'rgba(196, 160, 0, 0.15)',
+    purple: '#845EC2',
+    pink: '#D65DB1',
+    orange: '#FF9671'
+  };
+
+  const chartColors = [
+    colors.primary,
+    colors.teal,
+    colors.gold,
+    colors.purple,
+    colors.pink,
+    colors.orange,
+    '#0089BA',
+    '#00D2FC'
+  ];
+
+  // Chart.js global defaults
+  Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
+  Chart.defaults.color = '#718096';
+  Chart.defaults.plugins.legend.display = false;
+
+  // ========================================
+  // Initialization
+  // ========================================
+  document.addEventListener('DOMContentLoaded', function() {
+    setCurrentDate();
+    initializePeriodButtons();
+    initializeCharts();
+    loadDashboardData(currentPeriod);
+  });
+
+  function setCurrentDate() {
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', options);
+  }
+
+  function initializePeriodButtons() {
+    const buttons = document.querySelectorAll('.period-btn');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', function() {
+        buttons.forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        currentPeriod = this.dataset.period;
+        loadDashboardData(currentPeriod);
+      });
+    });
+  }
+
+  function initializeCharts() {
+    // Time Series Chart - Smooth curved lines like reference
+    const timeSeriesCtx = document.getElementById('timeSeriesChart').getContext('2d');
+    
+    // Create gradient fills
+    const gradient1 = timeSeriesCtx.createLinearGradient(0, 0, 0, 250);
+    gradient1.addColorStop(0, 'rgba(0, 51, 102, 0.2)');
+    gradient1.addColorStop(1, 'rgba(0, 51, 102, 0)');
+    
+    const gradient2 = timeSeriesCtx.createLinearGradient(0, 0, 0, 250);
+    gradient2.addColorStop(0, 'rgba(0, 201, 167, 0.15)');
+    gradient2.addColorStop(1, 'rgba(0, 201, 167, 0)');
+
+    timeSeriesChart = new Chart(timeSeriesCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Users',
+            data: [],
+            borderColor: colors.primary,
+            backgroundColor: gradient1,
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2.5,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: colors.primary,
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 2
+          },
+          {
+            label: 'Sessions',
+            data: [],
+            borderColor: colors.teal,
+            backgroundColor: gradient2,
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 5
+          },
+          {
+            label: 'Page Views',
+            data: [],
+            borderColor: colors.gold,
+            backgroundColor: 'transparent',
+            tension: 0.4,
+            borderWidth: 2,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            pointHoverRadius: 5
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          tooltip: {
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            titleColor: '#1a202c',
+            bodyColor: '#4a5568',
+            borderColor: '#e2e8f0',
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 8,
+            boxPadding: 6,
+            usePointStyle: true,
+            callbacks: {
+              label: function(context) {
+                return ' ' + context.dataset.label + ': ' + formatNumber(context.raw);
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { 
+              font: { size: 11 },
+              maxRotation: 0
+            }
+          },
+          y: {
+            beginAtZero: true,
+            grid: { 
+              color: 'rgba(0, 0, 0, 0.04)',
+              drawBorder: false
+            },
+            ticks: { 
+              font: { size: 11 },
+              callback: value => formatNumber(value)
+            }
+          }
+        }
+      }
+    });
+
+    // Performance Radar Chart
+    const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+    performanceChart = new Chart(performanceCtx, {
+      type: 'radar',
+      data: {
+        labels: ['Engagement', 'Sessions/User', 'Pages/Session', 'Avg Time', 'Return Rate'],
+        datasets: [
+          {
+            label: 'Current',
+            data: [65, 45, 70, 50, 55],
+            borderColor: colors.primary,
+            backgroundColor: 'rgba(0, 51, 102, 0.2)',
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: colors.primary
+          },
+          {
+            label: 'Target',
+            data: [80, 70, 85, 75, 80],
+            borderColor: colors.teal,
+            backgroundColor: 'rgba(0, 201, 167, 0.1)',
+            borderWidth: 2,
+            borderDash: [4, 4],
+            pointRadius: 3,
+            pointBackgroundColor: colors.teal
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          r: {
+            beginAtZero: true,
+            max: 100,
+            ticks: { 
+              display: false,
+              stepSize: 20
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.06)'
+            },
+            angleLines: {
+              color: 'rgba(0, 0, 0, 0.06)'
+            },
+            pointLabels: {
+              font: { size: 10 },
+              color: '#718096'
+            }
+          }
+        }
+      }
+    });
+
+    // Activity Mini Chart
+    const activityCtx = document.getElementById('activityChart').getContext('2d');
+    const activityGradient = activityCtx.createLinearGradient(0, 0, 0, 120);
+    activityGradient.addColorStop(0, 'rgba(0, 201, 167, 0.3)');
+    activityGradient.addColorStop(1, 'rgba(0, 201, 167, 0)');
+
+    activityChart = new Chart(activityCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          data: [],
+          borderColor: colors.teal,
+          backgroundColor: activityGradient,
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: false }
+        },
+        scales: {
+          x: { display: false },
+          y: { display: false }
+        }
+      }
+    });
+
+    // Traffic Doughnut Chart
+    const trafficCtx = document.getElementById('trafficChart').getContext('2d');
+    trafficChart = new Chart(trafficCtx, {
+      type: 'doughnut',
+      data: {
+        labels: [],
+        datasets: [{
+          data: [],
+          backgroundColor: chartColors,
+          borderWidth: 0,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '70%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(255,255,255,0.95)',
+            titleColor: '#1a202c',
+            bodyColor: '#4a5568',
+            borderColor: '#e2e8f0',
+            borderWidth: 1,
+            padding: 10,
+            cornerRadius: 8
+          }
+        }
+      }
+    });
+
+    // Devices Bar Chart
+    const devicesCtx = document.getElementById('devicesChart').getContext('2d');
+    devicesChart = new Chart(devicesCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Desktop', 'Mobile', 'Tablet'],
+        datasets: [{
+          data: [0, 0, 0],
+          backgroundColor: [colors.primary, colors.teal, colors.purple],
+          borderRadius: 8,
+          barThickness: 40
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(255,255,255,0.95)',
+            titleColor: '#1a202c',
+            bodyColor: '#4a5568',
+            borderColor: '#e2e8f0',
+            borderWidth: 1,
+            padding: 10,
+            cornerRadius: 8
+          }
+        },
+        scales: {
+          x: {
+            grid: { 
+              color: 'rgba(0,0,0,0.04)',
+              drawBorder: false
+            },
+            ticks: { font: { size: 10 } }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { font: { size: 11 } }
+          }
+        }
+      }
+    });
+  }
+
+  // ========================================
+  // Data Loading
+  // ========================================
+  function loadDashboardData(period) {
+    showLoading(true);
+    
+    google.script.run
+      .withSuccessHandler(handleDashboardData)
+      .withFailureHandler(handleError)
+      .fetchAllDashboardData(period);
+  }
+
+  function handleDashboardData(data) {
+    showLoading(false);
+    
+    if (data.overview && data.overview.success) {
+      updateMetrics(data.overview.data);
+      updateDateRange(data.overview.dateRange);
+    }
+    
+    if (data.timeSeries && data.timeSeries.success) {
+      updateTimeSeriesChart(data.timeSeries.data);
+      updateActivityChart(data.timeSeries.data);
+    }
+    
+    if (data.trafficSources && data.trafficSources.success) {
+      updateTrafficChart(data.trafficSources.data);
+    }
+    
+    if (data.devices && data.devices.success) {
+      updateDevicesChart(data.devices.data);
+    }
+    
+    if (data.topPages && data.topPages.success) {
+      updateTopPagesTable(data.topPages.data);
+    }
+    
+    if (data.countries && data.countries.success) {
+      updateCountriesTable(data.countries.data);
+    }
+    
+    if (data.engagement && data.engagement.success) {
+      updatePerformanceChart(data.engagement.data);
+    }
+  }
+
+  function handleError(error) {
+    showLoading(false);
+    console.error('Dashboard error:', error);
+    document.getElementById('dateRangeDisplay').textContent = 'Error loading data';
+  }
+
+  // ========================================
+  // UI Updates
+  // ========================================
+  function showLoading(isLoading) {
+    const indicator = document.getElementById('refreshIndicator');
+    if (isLoading) {
+      indicator.classList.add('loading');
+    } else {
+      indicator.classList.remove('loading');
+    }
+  }
+
+  function updateMetrics(metrics) {
+    totalUsers = metrics.totalUsers;
+    
+    document.getElementById('totalUsers').textContent = formatNumber(metrics.totalUsers);
+    document.getElementById('sessions').textContent = formatNumber(metrics.sessions);
+    document.getElementById('pageViews').textContent = formatNumber(metrics.pageViews);
+    document.getElementById('avgDuration').textContent = formatDuration(metrics.avgSessionDuration);
+    
+    // Activity stats
+    document.getElementById('newUsersVal').textContent = formatNumber(metrics.newUsers);
+    document.getElementById('engagementVal').textContent = metrics.engagementRate + '%';
+    document.getElementById('bounceVal').textContent = metrics.bounceRate + '%';
+  }
+
+  function updateDateRange(dateRange) {
+    const start = formatDate(dateRange.startDate);
+    const end = formatDate(dateRange.endDate);
+    document.getElementById('dateRangeDisplay').textContent = 
+      start === end ? start : `${start} — ${end}`;
+  }
+
+  function updateTimeSeriesChart(data) {
+    timeSeriesChart.data.labels = data.labels;
+    timeSeriesChart.data.datasets[0].data = data.users;
+    timeSeriesChart.data.datasets[1].data = data.sessions;
+    timeSeriesChart.data.datasets[2].data = data.pageViews;
+    timeSeriesChart.update('none');
+  }
+
+  function updateActivityChart(data) {
+    activityChart.data.labels = data.labels;
+    activityChart.data.datasets[0].data = data.users;
+    activityChart.update('none');
+  }
+
+  function updatePerformanceChart(data) {
+    if (data.values && data.values.length > 0) {
+      performanceChart.data.datasets[0].data = data.values;
+      performanceChart.update('none');
+    }
+  }
+
+  function updateTrafficChart(data) {
+    trafficChart.data.labels = data.labels;
+    trafficChart.data.datasets[0].data = data.values;
+    trafficChart.update('none');
+    
+    // Update legend
+    const legendContainer = document.getElementById('trafficLegend');
+    legendContainer.innerHTML = data.labels.map((label, i) => `
+      <div class="breakdown-legend-item">
+        <span class="breakdown-legend-dot" style="background: ${chartColors[i % chartColors.length]}"></span>
+        <span>${label}</span>
+      </div>
+    `).join('');
+  }
+
+  function updateDevicesChart(data) {
+    devicesChart.data.labels = data.labels;
+    devicesChart.data.datasets[0].data = data.values;
+    
+    // Update colors for actual devices
+    const deviceColors = data.labels.map((label, i) => chartColors[i % chartColors.length]);
+    devicesChart.data.datasets[0].backgroundColor = deviceColors;
+    
+    devicesChart.update('none');
+  }
+
+  function updateTopPagesTable(pages) {
+    const tbody = document.querySelector('#topPagesTable tbody');
+    
+    if (pages.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="loading-cell">No data available</td></tr>';
+      return;
+    }
+    
+    const maxViews = Math.max(...pages.map(p => p.views));
+    
+    tbody.innerHTML = pages.slice(0, 8).map(page => `
+      <tr>
+        <td class="page-title-cell" title="${escapeHtml(page.title)}">${escapeHtml(truncate(page.title, 35))}</td>
+        <td>${formatNumber(page.views)}</td>
+        <td>${formatDuration(page.avgDuration)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function updateCountriesTable(countries) {
+    const tbody = document.querySelector('#countriesTable tbody');
+    
+    if (countries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="loading-cell">No data available</td></tr>';
+      return;
+    }
+    
+    const total = countries.reduce((sum, c) => sum + c.users, 0);
+    
+    tbody.innerHTML = countries.slice(0, 8).map(country => {
+      const pct = total > 0 ? ((country.users / total) * 100).toFixed(1) : 0;
+      return `
+        <tr>
+          <td>${escapeHtml(country.country)}</td>
+          <td>${formatNumber(country.users)}</td>
+          <td>
+            ${pct}%
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${pct}%"></div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // ========================================
+  // Utility Functions
+  // ========================================
+  function formatNumber(num) {
+    if (num === null || num === undefined || isNaN(num)) return '-';
+    num = parseInt(num);
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toLocaleString();
+  }
+
+  function formatDuration(seconds) {
+    if (!seconds || seconds === 0) return '0s';
+    seconds = parseFloat(seconds);
+    
+    if (seconds < 60) {
+      return Math.round(seconds) + 's';
+    } else if (seconds < 3600) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.round(seconds % 60);
+      return mins + 'm ' + secs + 's';
+    } else {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      return hrs + 'h ' + mins + 'm';
+    }
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return months[parseInt(parts[1]) - 1] + ' ' + parseInt(parts[2]) + ', ' + parts[0];
+    }
+    return dateStr;
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function truncate(str, len) {
+    if (!str) return '';
+    return str.length > len ? str.substring(0, len) + '...' : str;
+  }
+
+  // ========================================
+  // PDF Export - Force fit to single page
+  // ========================================
+  async function exportToPDF() {
+    const btn = document.getElementById('exportPdfBtn');
+    const originalHTML = btn.innerHTML;
+    
+    btn.innerHTML = '<div class="spinner"></div> Generating...';
+    btn.disabled = true;
+    
+    try {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
+      // Header height and footer height
+      const headerHeight = 28;
+      const footerHeight = 12;
+      const contentMargin = 6;
+      
+      // Available height for content (page height minus header, footer, and margins)
+      const availableHeight = pageHeight - headerHeight - footerHeight - (contentMargin * 2);
+      const contentWidth = pageWidth - 12; // 6mm margin on each side
+      
+      // Draw Header
+      pdf.setFillColor(0, 51, 102);
+      pdf.rect(0, 0, pageWidth, headerHeight, 'F');
+      
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('UWC Innovation Hub', pageWidth / 2, 10, { align: 'center' });
+      
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('Analytics Dashboard - Interactive Loggerhead Turtle Hatchlings', pageWidth / 2, 17, { align: 'center' });
+      
+      pdf.setTextColor(196, 160, 0);
+      pdf.setFontSize(8);
+      const dateStr = document.getElementById('dateRangeDisplay').textContent;
+      pdf.text('Report Period: ' + dateStr, pageWidth / 2, 24, { align: 'center' });
+      
+      // Capture dashboard content
+      const content = document.getElementById('dashboardContent');
+      
+      // Use higher scale for better quality
+      const canvas = await html2canvas(content, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#f5f7fa'
+      });
+      
+      // Calculate scaling to fit content on single page
+      const imgAspectRatio = canvas.width / canvas.height;
+      let imgWidth = contentWidth;
+      let imgHeight = imgWidth / imgAspectRatio;
+      
+      // If height exceeds available space, scale down to fit
+      if (imgHeight > availableHeight) {
+        imgHeight = availableHeight;
+        imgWidth = imgHeight * imgAspectRatio;
+      }
+      
+      // Center horizontally if width is less than available
+      const xOffset = (pageWidth - imgWidth) / 2;
+      const yOffset = headerHeight + contentMargin;
+      
+      // Add the scaled image
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      pdf.addImage(imgData, 'JPEG', xOffset, yOffset, imgWidth, imgHeight);
+      
+      // Draw Footer
+      pdf.setFillColor(0, 34, 68);
+      pdf.rect(0, pageHeight - footerHeight, pageWidth, footerHeight, 'F');
+      
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(7);
+      pdf.text('University of the Western Cape | Innovation Hub | 405 Voortrekker Road, Oostersee | infouih@uwc.ac.za', 
+               pageWidth / 2, pageHeight - 5, { align: 'center' });
+      
+      // Save PDF
+      const today = new Date().toISOString().split('T')[0];
+      pdf.save(`UWC_Analytics_${currentPeriod}_${today}.pdf`);
+      
+    } catch (error) {
+      console.error('PDF export error:', error);
+      alert('Error generating PDF. Please try again.');
+    } finally {
+      btn.innerHTML = originalHTML;
+      btn.disabled = false;
+    }
+  }
+</script>
