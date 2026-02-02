@@ -697,11 +697,12 @@
       const availableHeight = pageHeight - headerHeight - footerHeight - (contentMargin * 2);
       const contentWidth = pageWidth - 12; // 6mm margin on each side
       
-      // Draw Header
-      pdf.setFillColor(0, 51, 102);
+      // Draw Header - white background
+      pdf.setFillColor(255, 255, 255);
       pdf.rect(0, 0, pageWidth, headerHeight, 'F');
 
-      // Add header logo via server-side base64 fetch
+      // Add header logo centered via server-side base64 fetch
+      var logoYEnd = 12;
       try {
         var logoBase64 = await new Promise(function(resolve, reject) {
           google.script.run
@@ -710,28 +711,33 @@
             .fetchLogoAsBase64();
         });
         if (logoBase64) {
-          var logoH = 14;
+          var logoH = 10;
           var tempImg = new Image();
           tempImg.src = logoBase64;
           await new Promise(function(r) { tempImg.onload = r; tempImg.onerror = r; });
           var logoW = (tempImg.naturalWidth / tempImg.naturalHeight) * logoH;
-          pdf.addImage(logoBase64, 'PNG', 6, (headerHeight - logoH) / 2, logoW, logoH);
+          pdf.addImage(logoBase64, 'PNG', (pageWidth - logoW) / 2, 2, logoW, logoH);
+          logoYEnd = 13;
         }
       } catch(e) { console.warn('Logo embed failed:', e); }
 
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(16);
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(9);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('UWC Immersive Zone', pageWidth / 2, 10, { align: 'center' });
+      pdf.text('UWC Immersive Zone', pageWidth / 2, logoYEnd + 2, { align: 'center' });
 
-      pdf.setFontSize(10);
+      pdf.setFontSize(7);
       pdf.setFont('helvetica', 'normal');
-      pdf.text('Analytics Dashboard - Interactive Loggerhead Turtle Hatchlings', pageWidth / 2, 17, { align: 'center' });
+      pdf.text('Analytics Dashboard - Interactive Loggerhead Turtle Hatchlings', pageWidth / 2, logoYEnd + 6, { align: 'center' });
 
-      pdf.setTextColor(196, 160, 0);
-      pdf.setFontSize(8);
+      pdf.setFontSize(6);
       const dateStr = document.getElementById('dateRangeDisplay').textContent;
-      pdf.text('Report Period: ' + dateStr, pageWidth / 2, 24, { align: 'center' });
+      pdf.text('Report Period: ' + dateStr, pageWidth / 2, logoYEnd + 10, { align: 'center' });
+
+      // Blue UWC line below header
+      pdf.setFillColor(10, 26, 92); // --uwc-blue #0a1a5c
+      var blueLineY = headerHeight - 1.5;
+      pdf.rect(0, blueLineY, pageWidth, 1.5, 'F');
       
       // Capture dashboard content
       const content = document.getElementById('dashboardContent');
