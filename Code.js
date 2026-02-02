@@ -1,5 +1,5 @@
 /**
- * UWC Innovation Hub - Analytics Dashboard
+ * UWC Immersive Zone - Analytics Dashboard
  * Project: Interactive Loggerhead Turtle Hatchlings
  * GA4 Property ID: 522398801
  * 
@@ -16,7 +16,7 @@ const GA4_API_URL = 'https://analyticsdata.googleapis.com/v1beta/properties/' + 
 function doGet(e) {
   return HtmlService.createTemplateFromFile('Dashboard')
     .evaluate()
-    .setTitle('UWC Innovation Hub - Analytics Dashboard')
+    .setTitle('UWC Immersive Zone - Analytics Dashboard')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }

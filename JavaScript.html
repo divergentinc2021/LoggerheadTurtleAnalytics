@@ -1,6 +1,6 @@
 <script>
   // ========================================
-  // UWC Innovation Hub - Analytics Dashboard
+  // UWC Immersive Zone - Analytics Dashboard
   // Modern Chart.js Configuration
   // ========================================
 
@@ -700,16 +700,28 @@
       // Draw Header
       pdf.setFillColor(0, 51, 102);
       pdf.rect(0, 0, pageWidth, headerHeight, 'F');
-      
+
+      // Add header logo
+      try {
+        var logoImg = document.querySelector('.header .logo');
+        if (logoImg) {
+          var logoCanvas = await html2canvas(logoImg, { scale: 2, useCORS: true, logging: false, backgroundColor: null });
+          var logoData = logoCanvas.toDataURL('image/png');
+          var logoH = 14;
+          var logoW = (logoCanvas.width / logoCanvas.height) * logoH;
+          pdf.addImage(logoData, 'PNG', 6, (headerHeight - logoH) / 2, logoW, logoH);
+        }
+      } catch(e) { console.warn('Logo embed failed:', e); }
+
       pdf.setTextColor(255, 255, 255);
       pdf.setFontSize(16);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('UWC Innovation Hub', pageWidth / 2, 10, { align: 'center' });
-      
+      pdf.text('UWC Immersive Zone', pageWidth / 2, 10, { align: 'center' });
+
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'normal');
       pdf.text('Analytics Dashboard - Interactive Loggerhead Turtle Hatchlings', pageWidth / 2, 17, { align: 'center' });
-      
+
       pdf.setTextColor(196, 160, 0);
       pdf.setFontSize(8);
       const dateStr = document.getElementById('dateRangeDisplay').textContent;
@@ -751,7 +763,7 @@
       
       pdf.setTextColor(255, 255, 255);
       pdf.setFontSize(7);
-      pdf.text('University of the Western Cape | Innovation Hub | 405 Voortrekker Road, Oostersee | infouih@uwc.ac.za',
+      pdf.text('University of the Western Cape | UWC Immersive Zone | 405 Voortrekker Road, Oostersee | infouih@uwc.ac.za',
                pageWidth / 2, pageHeight - 5, { align: 'center' });
       
       // Save PDF
