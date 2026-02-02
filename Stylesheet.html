@@ -9,8 +9,8 @@
     --uwc-blue: #0a1a5c;
     --uwc-blue-dark: #002244;
     --uwc-blue-light: #0055a4;
-    --uwc-gold: #C4A000;
-    --uwc-gold-light: #C4A000;
+    --uwc-gold: #bd9a4f;
+    --uwc-gold-light: #bd9a4f;
     --uwc-red: #8B1538;
     
     /* Accent Colors */
@@ -198,14 +198,14 @@
     letter-spacing: 0.8px;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(196,160,0,0.3);
+    box-shadow: 0 2px 8px rgba(189,154,79,0.3);
   }
 
   .btn-export:hover {
     background: var(--uwc-gold);
     color: #ffffff;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(196,160,0,0.4);
+    box-shadow: 0 4px 12px rgba(189,154,79,0.4);
   }
 
   .header-divider {
@@ -261,6 +261,17 @@
   .nav-strip-left svg {
     width: 12px;
     height: 12px;
+  }
+
+  .breadcrumb-link {
+    color: rgba(255,255,255,0.9);
+    text-decoration: none;
+    transition: color 0.2s ease;
+    cursor: pointer;
+  }
+
+  .breadcrumb-link:hover {
+    color: var(--uwc-gold);
   }
 
   .breadcrumb-home {
@@ -353,7 +364,7 @@
     cursor: pointer;
     text-decoration: none;
     transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(196,160,0,0.3);
+    box-shadow: 0 2px 8px rgba(189,154,79,0.3);
     white-space: nowrap;
   }
 
@@ -361,7 +372,7 @@
     background: var(--uwc-gold);
     color: #ffffff;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(196,160,0,0.4);
+    box-shadow: 0 4px 12px rgba(189,154,79,0.4);
   }
 
   .btn-view-project svg {
@@ -548,7 +559,7 @@
   .metric-card:hover {
     transform: translateY(-4px);
     box-shadow: var(--shadow-lg);
-    border-color: rgba(196, 160, 0, 0.3);
+    border-color: rgba(189, 154, 79, 0.3);
   }
 
   .metric-card:hover::before {
@@ -907,7 +918,7 @@
   }
 
   tr:hover td {
-    background: rgba(196, 160, 0, 0.05);
+    background: rgba(189, 154, 79, 0.05);
   }
 
   .loading-cell {
@@ -1254,7 +1265,7 @@
 
   .new-users-acq { background: rgba(0, 201, 167, 0.15); color: var(--accent-teal); }
   .returning-users-acq { background: rgba(0, 51, 102, 0.1); color: var(--uwc-blue); }
-  .sessions-acq { background: rgba(196, 160, 0, 0.15); color: var(--uwc-gold); }
+  .sessions-acq { background: rgba(189, 154, 79, 0.15); color: var(--uwc-gold); }
   .engagement-acq { background: rgba(132, 94, 194, 0.15); color: var(--accent-purple); }
 
   .acquisition-detail {
