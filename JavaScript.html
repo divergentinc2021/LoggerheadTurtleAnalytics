@@ -689,13 +689,14 @@
       const pageHeight = pdf.internal.pageSize.getHeight();
       
       // Header height and footer height
-      const headerHeight = 28;
+      const headerHeight = 30;
       const footerHeight = 12;
-      const contentMargin = 6;
-      
+      const contentMargin = 2;
+      const sideMargin = 3; // 3mm each side for wider content
+
       // Available height for content (page height minus header, footer, and margins)
       const availableHeight = pageHeight - headerHeight - footerHeight - (contentMargin * 2);
-      const contentWidth = pageWidth - 12; // 6mm margin on each side
+      const contentWidth = pageWidth - (sideMargin * 2);
       
       // Draw Header - white background
       pdf.setFillColor(255, 255, 255);
@@ -716,8 +717,8 @@
           tempImg.src = logoBase64;
           await new Promise(function(r) { tempImg.onload = r; tempImg.onerror = r; });
           var logoW = (tempImg.naturalWidth / tempImg.naturalHeight) * logoH;
-          pdf.addImage(logoBase64, 'PNG', (pageWidth - logoW) / 2, 2, logoW, logoH);
-          logoYEnd = 13;
+          pdf.addImage(logoBase64, 'PNG', (pageWidth - logoW) / 2, 5, logoW, logoH);
+          logoYEnd = 16;
         }
       } catch(e) { console.warn('Logo embed failed:', e); }
 
