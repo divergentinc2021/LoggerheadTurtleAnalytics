@@ -586,11 +586,25 @@ function testAPIConnection() {
  * Sheet columns: Email | Name | Access | Last Login | Auth Code | Code Timestamp | Attempts
  */
 function getUsersSheet() {
-  var ss = SpreadsheetApp.getActive();
-  if (!ss) {
-    // Create a new spreadsheet if not bound
-    ss = SpreadsheetApp.create('UWC Immersive Zone - Analytics Users');
+  var props = PropertiesService.getScriptProperties();
+  var sheetId = props.getProperty('USERS_SHEET_ID');
+  var ss = null;
+
+  if (sheetId) {
+    try {
+      ss = SpreadsheetApp.openById(sheetId);
+    } catch (e) {
+      Logger.log('Stored sheet ID invalid, creating new: ' + e);
+      ss = null;
+    }
   }
+
+  if (!ss) {
+    ss = SpreadsheetApp.create('UWC Immersive Zone - Analytics Users');
+    props.setProperty('USERS_SHEET_ID', ss.getId());
+    Logger.log('Created Users spreadsheet: ' + ss.getUrl());
+  }
+
   var sheet = ss.getSheetByName('Users');
   if (!sheet) {
     sheet = ss.insertSheet('Users');
@@ -613,7 +627,8 @@ function getUsersSheet() {
  */
 function checkUserEmail(email) {
   try {
-    email = email.trim().toLowerCase();
+    if (!email) return { success: false, error: 'NO_EMAIL' };
+    email = String(email).trim().toLowerCase();
     var sheet = getUsersSheet();
     var data = sheet.getDataRange().getValues();
 
@@ -654,7 +669,8 @@ function generateAuthCode() {
  */
 function sendAuthCode(email) {
   try {
-    email = email.trim().toLowerCase();
+    if (!email) return { success: false, error: 'NO_EMAIL' };
+    email = String(email).trim().toLowerCase();
     var userCheck = checkUserEmail(email);
     if (!userCheck.success) return userCheck;
 
@@ -751,8 +767,9 @@ function buildAuthEmailHtml(name, code) {
  */
 function verifyAuthCode(email, code) {
   try {
-    email = email.trim().toLowerCase();
-    code = code.trim().toUpperCase();
+    if (!email || !code) return { success: false, error: 'MISSING_INPUT' };
+    email = String(email).trim().toLowerCase();
+    code = String(code).trim().toUpperCase();
 
     var sheet = getUsersSheet();
     var data = sheet.getDataRange().getValues();
