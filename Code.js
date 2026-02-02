@@ -702,7 +702,7 @@ function sendAuthCode(email) {
  */
 function sendEmailViaPHP(email, name, code) {
   try {
-    var apiKey = PropertiesService.getScriptProperties().getProperty('PHP_API_KEY') || 'tto-contact-form-2024-xyz';
+    var apiKey = PropertiesService.getScriptProperties().getProperty('PHP_API_KEY') || 'uwc-analytics-2025-sec';
 
     var payload = {
       to: email,
