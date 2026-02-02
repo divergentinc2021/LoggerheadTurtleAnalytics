@@ -11,12 +11,23 @@ const GA4_PROPERTY_ID = '522398801';
 const GA4_API_URL = 'https://analyticsdata.googleapis.com/v1beta/properties/' + GA4_PROPERTY_ID + ':runReport';
 
 /**
- * Serves the HTML dashboard
+ * Serves the login page or dashboard based on auth parameter
  */
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('Dashboard')
+  var page = (e && e.parameter && e.parameter.page) || 'login';
+
+  if (page === 'dashboard') {
+    return HtmlService.createTemplateFromFile('Dashboard')
+      .evaluate()
+      .setTitle('UWC Immersive Zone - Analytics Dashboard')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+
+  // Default: serve login page
+  return HtmlService.createTemplateFromFile('Login')
     .evaluate()
-    .setTitle('UWC Immersive Zone - Analytics Dashboard')
+    .setTitle('UWC Immersive Zone - Login')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -564,6 +575,257 @@ function testAPIConnection() {
   }
   
   return result;
+}
+
+// ============================================
+// LOGIN & AUTHENTICATION
+// ============================================
+
+/**
+ * Get or create the Users spreadsheet bound to this script
+ * Sheet columns: Email | Name | Access | Last Login | Auth Code | Code Timestamp | Attempts
+ */
+function getUsersSheet() {
+  var ss = SpreadsheetApp.getActive();
+  if (!ss) {
+    // Create a new spreadsheet if not bound
+    ss = SpreadsheetApp.create('UWC Immersive Zone - Analytics Users');
+  }
+  var sheet = ss.getSheetByName('Users');
+  if (!sheet) {
+    sheet = ss.insertSheet('Users');
+    sheet.appendRow(['Email', 'Name', 'Access', 'Last Login', 'Auth Code', 'Code Timestamp', 'Attempts']);
+    sheet.setFrozenRows(1);
+    // Set column widths
+    sheet.setColumnWidth(1, 250);
+    sheet.setColumnWidth(2, 150);
+    sheet.setColumnWidth(3, 100);
+    sheet.setColumnWidth(4, 180);
+    sheet.setColumnWidth(5, 100);
+    sheet.setColumnWidth(6, 180);
+    sheet.setColumnWidth(7, 80);
+  }
+  return sheet;
+}
+
+/**
+ * Check if email is registered and has access
+ */
+function checkUserEmail(email) {
+  try {
+    email = email.trim().toLowerCase();
+    var sheet = getUsersSheet();
+    var data = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0].toString().trim().toLowerCase() === email) {
+        var access = data[i][2].toString().trim().toLowerCase();
+        if (access === 'granted' || access === 'yes' || access === 'true') {
+          return { success: true, name: data[i][1], row: i + 1 };
+        } else if (access === 'denied' || access === 'blocked') {
+          return { success: false, error: 'ACCESS_DENIED' };
+        } else {
+          return { success: false, error: 'ACCESS_PENDING' };
+        }
+      }
+    }
+
+    return { success: false, error: 'NOT_REGISTERED' };
+  } catch (e) {
+    Logger.log('checkUserEmail error: ' + e);
+    return { success: false, error: 'SYSTEM_ERROR' };
+  }
+}
+
+/**
+ * Generate a 5-character alphanumeric auth code (no ambiguous chars)
+ */
+function generateAuthCode() {
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var code = '';
+  for (var i = 0; i < 5; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+/**
+ * Send auth code to user's email via PHP mail API
+ */
+function sendAuthCode(email) {
+  try {
+    email = email.trim().toLowerCase();
+    var userCheck = checkUserEmail(email);
+    if (!userCheck.success) return userCheck;
+
+    var code = generateAuthCode();
+    var now = new Date();
+
+    // Store code in sheet
+    var sheet = getUsersSheet();
+    var row = userCheck.row;
+    sheet.getRange(row, 5).setValue(code);           // Auth Code column
+    sheet.getRange(row, 6).setValue(now.toISOString()); // Code Timestamp
+    sheet.getRange(row, 7).setValue(0);              // Reset attempts
+
+    // Send via PHP API
+    var sent = sendEmailViaPHP(email, userCheck.name, code);
+    if (sent) {
+      return { success: true, message: 'Code sent to ' + email };
+    } else {
+      return { success: false, error: 'EMAIL_FAILED' };
+    }
+  } catch (e) {
+    Logger.log('sendAuthCode error: ' + e);
+    return { success: false, error: 'SYSTEM_ERROR' };
+  }
+}
+
+/**
+ * Send email via the UWC Immersive Zone PHP mail API
+ */
+function sendEmailViaPHP(email, name, code) {
+  try {
+    var payload = {
+      to: email,
+      name: name || 'User',
+      subject: 'UWC Immersive Zone - Your Login Code',
+      code: code,
+      template: 'auth_code'
+    };
+
+    var options = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    var response = UrlFetchApp.fetch('https://innovationhub.uwc.ac.za/sendmail-api.php', options);
+    var status = response.getResponseCode();
+    Logger.log('Email API response: ' + status + ' - ' + response.getContentText());
+    return status === 200;
+  } catch (e) {
+    Logger.log('sendEmailViaPHP error: ' + e);
+    // Fallback: send via GmailApp
+    try {
+      GmailApp.sendEmail(email, 'UWC Immersive Zone - Your Login Code',
+        'Hi ' + (name || 'User') + ',\n\nYour login code is: ' + code + '\n\nThis code expires in 10 minutes.\n\nUWC Immersive Zone',
+        {
+          name: 'UWC Immersive Zone',
+          htmlBody: buildAuthEmailHtml(name, code)
+        }
+      );
+      return true;
+    } catch (e2) {
+      Logger.log('GmailApp fallback error: ' + e2);
+      return false;
+    }
+  }
+}
+
+/**
+ * Build branded HTML email for auth code
+ */
+function buildAuthEmailHtml(name, code) {
+  return '<div style="max-width:480px;margin:0 auto;font-family:Arial,sans-serif;">' +
+    '<div style="background:#0a1a5c;padding:24px;text-align:center;">' +
+    '<h2 style="color:#ffffff;margin:0;font-size:18px;">UWC Immersive Zone</h2>' +
+    '</div>' +
+    '<div style="padding:32px 24px;background:#ffffff;">' +
+    '<p style="color:#333;font-size:15px;">Hi ' + (name || 'User') + ',</p>' +
+    '<p style="color:#333;font-size:15px;">Your login verification code is:</p>' +
+    '<div style="text-align:center;margin:24px 0;">' +
+    '<div style="display:inline-block;padding:16px 32px;background:#f8f8f8;border:2px solid #bd9a4f;border-radius:8px;font-size:28px;font-weight:bold;letter-spacing:6px;color:#0a1a5c;">' + code + '</div>' +
+    '</div>' +
+    '<p style="color:#666;font-size:13px;">This code expires in 10 minutes. If you did not request this, please ignore this email.</p>' +
+    '</div>' +
+    '<div style="background:#f5f5f5;padding:16px;text-align:center;font-size:12px;color:#999;">' +
+    'University of the Western Cape | UWC Immersive Zone' +
+    '</div>' +
+    '</div>';
+}
+
+/**
+ * Verify the auth code entered by the user
+ */
+function verifyAuthCode(email, code) {
+  try {
+    email = email.trim().toLowerCase();
+    code = code.trim().toUpperCase();
+
+    var sheet = getUsersSheet();
+    var data = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0].toString().trim().toLowerCase() === email) {
+        var storedCode = data[i][4].toString().trim().toUpperCase();
+        var timestamp = data[i][5].toString();
+        var attempts = parseInt(data[i][6]) || 0;
+
+        // Check max attempts
+        if (attempts >= 3) {
+          return { success: false, error: 'MAX_ATTEMPTS' };
+        }
+
+        // Increment attempts
+        sheet.getRange(i + 1, 7).setValue(attempts + 1);
+
+        // Check code
+        if (storedCode !== code) {
+          return { success: false, error: 'INVALID_CODE', attemptsLeft: 2 - attempts };
+        }
+
+        // Check expiry (10 minutes)
+        if (timestamp) {
+          var codeTime = new Date(timestamp);
+          var now = new Date();
+          var diffMinutes = (now - codeTime) / (1000 * 60);
+          if (diffMinutes > 10) {
+            return { success: false, error: 'CODE_EXPIRED' };
+          }
+        }
+
+        // Success — update last login, clear code
+        var row = i + 1;
+        sheet.getRange(row, 4).setValue(new Date().toISOString()); // Last Login
+        sheet.getRange(row, 5).setValue('');   // Clear auth code
+        sheet.getRange(row, 6).setValue('');   // Clear timestamp
+        sheet.getRange(row, 7).setValue(0);    // Reset attempts
+
+        // Generate session token
+        var token = Utilities.getUuid();
+        var cache = CacheService.getScriptCache();
+        cache.put('session_' + token, email, 3600); // 1 hour session
+
+        return {
+          success: true,
+          name: data[i][1],
+          token: token,
+          dashboardUrl: ScriptApp.getService().getUrl() + '?page=dashboard'
+        };
+      }
+    }
+
+    return { success: false, error: 'NOT_REGISTERED' };
+  } catch (e) {
+    Logger.log('verifyAuthCode error: ' + e);
+    return { success: false, error: 'SYSTEM_ERROR' };
+  }
+}
+
+/**
+ * Validate session token (called from dashboard)
+ */
+function validateSession(token) {
+  try {
+    if (!token) return false;
+    var cache = CacheService.getScriptCache();
+    var email = cache.get('session_' + token);
+    return !!email;
+  } catch (e) {
+    return false;
+  }
 }
 
 /**

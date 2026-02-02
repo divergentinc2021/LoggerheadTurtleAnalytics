@@ -1,0 +1,250 @@
+<script>
+  // ========================================
+  // UWC Immersive Zone - Login Page Logic
+  // ========================================
+
+  var loginEmail = '';
+  var isProcessing = false;
+
+  // Enter key support
+  document.addEventListener('DOMContentLoaded', function() {
+    var emailInput = document.getElementById('emailInput');
+    var codeInput = document.getElementById('codeInput');
+
+    emailInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleEmailSubmit();
+      }
+    });
+
+    codeInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleCodeSubmit();
+      }
+    });
+
+    // Auto-uppercase code input
+    codeInput.addEventListener('input', function() {
+      this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+
+    // Focus email input
+    emailInput.focus();
+  });
+
+  // ========================================
+  // Step 1: Email Submission
+  // ========================================
+  function handleEmailSubmit() {
+    if (isProcessing) return;
+
+    var email = document.getElementById('emailInput').value.trim();
+    if (!email || !isValidEmail(email)) {
+      showError('emailError', 'Please enter a valid email address.');
+      return;
+    }
+
+    loginEmail = email;
+    setLoading('emailBtn', true);
+    hideError('emailError');
+
+    google.script.run
+      .withSuccessHandler(handleSendCodeResult)
+      .withFailureHandler(function(err) {
+        setLoading('emailBtn', false);
+        showError('emailError', 'An error occurred. Please try again.');
+      })
+      .sendAuthCode(email);
+  }
+
+  function handleSendCodeResult(result) {
+    setLoading('emailBtn', false);
+
+    if (result.success) {
+      // Move to code entry step
+      document.getElementById('sentEmailDisplay').textContent = loginEmail;
+      showStep(2);
+      setTimeout(function() {
+        document.getElementById('codeInput').focus();
+      }, 300);
+    } else {
+      switch (result.error) {
+        case 'NOT_REGISTERED':
+          showError('emailError', 'This email is not registered. Please contact your administrator to request access.');
+          break;
+        case 'ACCESS_DENIED':
+          showError('emailError', 'Access has been denied for this account. Please contact your administrator.');
+          break;
+        case 'ACCESS_PENDING':
+          showError('emailError', 'Your access request is pending approval. Please check back later.');
+          break;
+        case 'EMAIL_FAILED':
+          showError('emailError', 'Failed to send verification email. Please try again.');
+          break;
+        default:
+          showError('emailError', 'An error occurred. Please try again.');
+      }
+    }
+  }
+
+  // ========================================
+  // Step 2: Code Verification
+  // ========================================
+  function handleCodeSubmit() {
+    if (isProcessing) return;
+
+    var code = document.getElementById('codeInput').value.trim().toUpperCase();
+    if (!code || code.length !== 5) {
+      showError('codeError', 'Please enter the 5-digit code sent to your email.');
+      return;
+    }
+
+    setLoading('codeBtn', true);
+    hideError('codeError');
+
+    google.script.run
+      .withSuccessHandler(handleVerifyResult)
+      .withFailureHandler(function(err) {
+        setLoading('codeBtn', false);
+        showError('codeError', 'An error occurred. Please try again.');
+      })
+      .verifyAuthCode(loginEmail, code);
+  }
+
+  function handleVerifyResult(result) {
+    setLoading('codeBtn', false);
+
+    if (result.success) {
+      // Show success screen
+      document.getElementById('welcomeName').textContent = result.name || 'User';
+      showStep(3);
+
+      // Redirect to dashboard after animation
+      setTimeout(function() {
+        window.top.location.href = result.dashboardUrl;
+      }, 1800);
+    } else {
+      switch (result.error) {
+        case 'INVALID_CODE':
+          var msg = 'Invalid code.';
+          if (result.attemptsLeft !== undefined && result.attemptsLeft > 0) {
+            msg += ' ' + result.attemptsLeft + ' attempt(s) remaining.';
+          }
+          showError('codeError', msg);
+          break;
+        case 'CODE_EXPIRED':
+          showError('codeError', 'This code has expired. Please request a new one.');
+          break;
+        case 'MAX_ATTEMPTS':
+          showError('codeError', 'Too many failed attempts. Please request a new code.');
+          break;
+        default:
+          showError('codeError', 'An error occurred. Please try again.');
+      }
+      // Clear input on error
+      document.getElementById('codeInput').value = '';
+      document.getElementById('codeInput').focus();
+    }
+  }
+
+  // ========================================
+  // Resend Code
+  // ========================================
+  function resendCode() {
+    if (isProcessing) return;
+    hideError('codeError');
+    document.getElementById('codeInput').value = '';
+
+    setLoading('codeBtn', true);
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        setLoading('codeBtn', false);
+        if (result.success) {
+          showError('codeError', 'A new code has been sent to ' + loginEmail);
+          document.getElementById('codeError').style.background = '#f0fff4';
+          document.getElementById('codeError').style.borderColor = '#9ae6b4';
+          document.getElementById('codeError').style.color = '#276749';
+          document.getElementById('codeInput').focus();
+        } else {
+          showError('codeError', 'Failed to resend code. Please try again.');
+        }
+      })
+      .withFailureHandler(function() {
+        setLoading('codeBtn', false);
+        showError('codeError', 'Failed to resend code. Please try again.');
+      })
+      .sendAuthCode(loginEmail);
+  }
+
+  // ========================================
+  // Navigation
+  // ========================================
+  function goBackToEmail() {
+    hideError('codeError');
+    document.getElementById('codeInput').value = '';
+    showStep(1);
+    setTimeout(function() {
+      document.getElementById('emailInput').focus();
+    }, 300);
+  }
+
+  function showStep(stepNumber) {
+    var steps = document.querySelectorAll('.login-step');
+    steps.forEach(function(step) {
+      step.classList.remove('active');
+    });
+    document.getElementById('loginStep' + stepNumber).classList.add('active');
+  }
+
+  // ========================================
+  // Utility
+  // ========================================
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function showError(elementId, message) {
+    var el = document.getElementById(elementId);
+    el.textContent = message;
+    el.style.display = 'block';
+    // Reset to error styling
+    el.style.background = '#fff5f5';
+    el.style.borderColor = '#feb2b2';
+    el.style.color = '#c53030';
+  }
+
+  function hideError(elementId) {
+    document.getElementById(elementId).style.display = 'none';
+  }
+
+  function setLoading(btnId, loading) {
+    isProcessing = loading;
+    var btn = document.getElementById(btnId);
+    if (loading) {
+      btn.disabled = true;
+      btn.querySelector('.login-btn-text').textContent = 'Please wait...';
+      var icon = btn.querySelector('.login-btn-icon');
+      if (icon) icon.style.display = 'none';
+      // Add spinner
+      var spinner = document.createElement('div');
+      spinner.className = 'spinner-small';
+      spinner.id = 'btnSpinner';
+      btn.appendChild(spinner);
+    } else {
+      btn.disabled = false;
+      var spinner = document.getElementById('btnSpinner');
+      if (spinner) spinner.remove();
+      var icon = btn.querySelector('.login-btn-icon');
+      if (icon) icon.style.display = '';
+      // Restore text
+      if (btnId === 'emailBtn') {
+        btn.querySelector('.login-btn-text').textContent = 'Continue';
+      } else if (btnId === 'codeBtn') {
+        btn.querySelector('.login-btn-text').textContent = 'Verify & Sign In';
+      }
+    }
+  }
+</script>
