@@ -48,11 +48,23 @@
   // Initialization
   // ========================================
   document.addEventListener('DOMContentLoaded', function() {
+    bustImageCache();
     setCurrentDate();
     initializePeriodButtons();
     initializeCharts();
     loadDashboardData(currentPeriod);
   });
+
+  function bustImageCache() {
+    var cacheBuster = '?v=' + Date.now();
+    var images = document.querySelectorAll('img[src]');
+    images.forEach(function(img) {
+      var src = img.getAttribute('src');
+      if (src && src.indexOf('?') === -1) {
+        img.setAttribute('src', src + cacheBuster);
+      }
+    });
+  }
 
   function setCurrentDate() {
     const now = new Date();
