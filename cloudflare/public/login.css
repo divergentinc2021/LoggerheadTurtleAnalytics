@@ -1,0 +1,461 @@
+  /* ========================================
+     UWC Immersive Zone - Login Page Styles
+     Centered Card Modal on Blue Background
+     ======================================== */
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0a1a5c 0%, #0d2470 40%, #102d8a 100%);
+    overflow: hidden;
+  }
+
+  /* ========================================
+     Full-page centered layout
+     ======================================== */
+  .login-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    width: 100%;
+    padding: 24px;
+    position: relative;
+  }
+
+  /* Subtle radial glow decorations on background */
+  .login-page::before {
+    content: '';
+    position: absolute;
+    top: -15%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(189, 154, 79, 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .login-page::after {
+    content: '';
+    position: absolute;
+    bottom: -15%;
+    left: -10%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  /* ========================================
+     White Card Modal
+     ======================================== */
+  .login-card {
+    position: relative;
+    z-index: 1;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    width: 100%;
+    max-width: 480px;
+    overflow: hidden;
+    animation: cardSlideIn 0.4s ease;
+  }
+
+  @keyframes cardSlideIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* ========================================
+     Card Header — Blue banner with logo
+     ======================================== */
+  .login-card-header {
+    background: linear-gradient(135deg, #0a1a5c 0%, #0d2470 100%);
+    padding: 32px 32px 24px;
+    text-align: center;
+  }
+
+  .login-logo {
+    height: 56px;
+    width: auto;
+    margin-bottom: 14px;
+  }
+
+  .login-card-title {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+  }
+
+  .login-card-subtitle {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+
+  /* ========================================
+     Gold accent stripe
+     ======================================== */
+  .login-gold-stripe {
+    height: 3px;
+    background: linear-gradient(90deg, #bd9a4f 0%, #d4b96a 50%, #bd9a4f 100%);
+  }
+
+  /* ========================================
+     Feature Icons Row — Horizontal
+     ======================================== */
+  .login-features-row {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    padding: 16px 24px;
+    background: #f8fafc;
+    border-bottom: 1px solid #edf2f7;
+  }
+
+  .login-feature {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #64748b;
+    white-space: nowrap;
+  }
+
+  .login-feature svg {
+    color: #bd9a4f;
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+  }
+
+  /* ========================================
+     Form Container
+     ======================================== */
+  .login-form-container {
+    padding: 28px 32px 24px;
+  }
+
+  /* Steps */
+  .login-step {
+    display: none;
+  }
+
+  .login-step.active {
+    display: block;
+    animation: loginFadeIn 0.3s ease;
+  }
+
+  @keyframes loginFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .login-step-header {
+    margin-bottom: 24px;
+  }
+
+  .login-step-header h2 {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #0a1a5c;
+    margin-bottom: 6px;
+  }
+
+  .login-step-header p {
+    font-size: 0.85rem;
+    color: #718096;
+    line-height: 1.5;
+  }
+
+  .login-step-header strong {
+    color: #0a1a5c;
+  }
+
+  /* Input */
+  .login-input-group {
+    margin-bottom: 18px;
+  }
+
+  .login-input-group label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #4a5568;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .login-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .login-input-icon {
+    position: absolute;
+    left: 14px;
+    color: #a0aec0;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .login-input-wrapper input {
+    width: 100%;
+    padding: 13px 14px 13px 44px;
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    color: #1a202c;
+    background: #f7fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+
+  .login-input-wrapper input:focus {
+    border-color: #bd9a4f;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(189, 154, 79, 0.15);
+  }
+
+  .login-input-wrapper input::placeholder {
+    color: #cbd5e0;
+  }
+
+  /* Error */
+  .login-error {
+    padding: 10px 14px;
+    background: #fff5f5;
+    border: 1px solid #feb2b2;
+    border-radius: 8px;
+    color: #c53030;
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+  }
+
+  /* Button */
+  .login-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 24px;
+    background: #bd9a4f;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(189, 154, 79, 0.3);
+  }
+
+  .login-btn:hover {
+    background: #a8873f;
+    box-shadow: 0 4px 12px rgba(189, 154, 79, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .login-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .login-btn-icon {
+    flex-shrink: 0;
+  }
+
+  .login-btn .spinner-small {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Secondary actions */
+  .login-secondary-actions {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 18px;
+  }
+
+  .login-link-btn {
+    background: none;
+    border: none;
+    color: #718096;
+    font-size: 0.82rem;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: color 0.2s;
+  }
+
+  .login-link-btn:hover {
+    color: #bd9a4f;
+  }
+
+  /* Success */
+  .login-success {
+    text-align: center;
+    padding: 12px 0;
+  }
+
+  .login-success-icon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 20px;
+    background: rgba(0, 201, 167, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #00C9A7;
+  }
+
+  .login-success h2 {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #0a1a5c;
+    margin-bottom: 6px;
+  }
+
+  .login-success p {
+    font-size: 0.85rem;
+    color: #718096;
+    margin-bottom: 20px;
+  }
+
+  .login-progress-bar {
+    width: 180px;
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    margin: 0 auto;
+    overflow: hidden;
+  }
+
+  .login-progress-fill {
+    height: 100%;
+    background: #bd9a4f;
+    border-radius: 2px;
+    width: 0%;
+    animation: loginProgressFill 1.5s ease forwards;
+  }
+
+  @keyframes loginProgressFill {
+    0% { width: 0%; }
+    100% { width: 100%; }
+  }
+
+  /* ========================================
+     Card Footer
+     ======================================== */
+  .login-card-footer {
+    padding: 14px 24px;
+    text-align: center;
+    border-top: 1px solid #edf2f7;
+    background: #f8fafc;
+  }
+
+  .login-card-footer p {
+    font-size: 0.7rem;
+    color: #a0aec0;
+    letter-spacing: 0.3px;
+  }
+
+  .login-version {
+    margin-top: 4px;
+    font-size: 0.65rem;
+    color: #c0c8d4;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+  }
+
+  /* ========================================
+     Responsive
+     ======================================== */
+  @media (max-width: 540px) {
+    .login-page {
+      padding: 16px;
+    }
+
+    .login-card {
+      border-radius: 12px;
+    }
+
+    .login-card-header {
+      padding: 24px 20px 18px;
+    }
+
+    .login-logo {
+      height: 44px;
+      margin-bottom: 10px;
+    }
+
+    .login-card-title {
+      font-size: 1.2rem;
+    }
+
+    .login-card-subtitle {
+      font-size: 0.75rem;
+    }
+
+    .login-features-row {
+      gap: 14px;
+      padding: 12px 16px;
+    }
+
+    .login-feature {
+      font-size: 0.65rem;
+      gap: 4px;
+    }
+
+    .login-feature svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    .login-form-container {
+      padding: 22px 20px 18px;
+    }
+
+    .login-step-header h2 {
+      font-size: 1.2rem;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .login-features-row {
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      justify-content: center;
+    }
+  }

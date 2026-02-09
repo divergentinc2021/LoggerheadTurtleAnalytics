@@ -69,7 +69,7 @@ function doPost(e) {
     var token = body.token || '';
 
     // Actions that do NOT require a valid session
-    var publicActions = ['validateSession'];
+    var publicActions = ['validateSession', 'sendAuthCode', 'verifyAuthCode', 'getAppVersion'];
 
     // Validate session for all protected actions
     if (publicActions.indexOf(action) === -1) {
@@ -98,6 +98,12 @@ function doPost(e) {
         break;
       case 'fetchLogoAsBase64':
         result = fetchLogoAsBase64();
+        break;
+      case 'sendAuthCode':
+        result = sendAuthCode(params.email);
+        break;
+      case 'verifyAuthCode':
+        result = verifyAuthCode(params.email, params.code);
         break;
       default:
         result = { success: false, error: 'UNKNOWN_ACTION' };
@@ -1368,6 +1374,22 @@ function testVerifyAuthCode() {
   var testCode = 'XXXXX';                 // Replace with code from email
   var result = verifyAuthCode(testEmail, testCode);
   Logger.log('verifyAuthCode result: ' + JSON.stringify(result));
+}
+
+/**
+ * One-time setup: Set the Cloudflare Pages dashboard URL.
+ * Run this from the Apps Script editor to redirect logins to Cloudflare.
+ * Delete CF_DASHBOARD_URL property to revert to the old Apps Script dashboard.
+ */
+function setCloudflareDashboardUrl() {
+  var url = 'https://loggerheadturtleanalytics.pages.dev';
+  PropertiesService.getScriptProperties().setProperty('CF_DASHBOARD_URL', url);
+  Logger.log('CF_DASHBOARD_URL set to: ' + url);
+}
+
+function clearCloudflareDashboardUrl() {
+  PropertiesService.getScriptProperties().deleteProperty('CF_DASHBOARD_URL');
+  Logger.log('CF_DASHBOARD_URL cleared — login will redirect to Apps Script dashboard');
 }
 
 function authorizeScript() {

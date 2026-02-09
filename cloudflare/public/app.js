@@ -1067,8 +1067,8 @@
     try { sessionStorage.removeItem('uwc_session_name'); } catch(e) {}
     try { localStorage.removeItem('uwc_session_token'); } catch(e) {}
     try { localStorage.removeItem('uwc_session_name'); } catch(e) {}
-    // Redirect to Apps Script login page
-    window.location.href = LOGIN_URL;
+    // Redirect to Cloudflare-hosted login page
+    window.location.href = '/login.html';
   }
 
   // ========================================
