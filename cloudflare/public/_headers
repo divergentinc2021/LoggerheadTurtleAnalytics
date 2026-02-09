@@ -1,0 +1,9 @@
+# Default: block framing for all pages (security)
+/*
+  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: frame-ancestors 'self'
+
+# Allow Google Sites to embed the preview/redirect page
+/embed.html
+  ! X-Frame-Options
+  Content-Security-Policy: frame-ancestors 'self' https://sites.google.com https://*.googleusercontent.com
