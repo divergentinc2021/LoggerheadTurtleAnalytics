@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Loggerhead Turtle Hatchlings - UWC Immersive Zone</title>
+  <link rel="preconnect" href="https://innovationhub.uwc.ac.za">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -12,249 +13,180 @@
       background: #0a1a5c;
       color: #fff;
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       overflow: hidden;
-    }
-
-    .embed-container {
-      position: relative;
-      width: 100%;
-      height: 100vh;
       cursor: pointer;
-      overflow: hidden;
     }
 
-    /* Background image with Ken Burns effect */
-    .embed-bg {
-      position: absolute;
-      inset: 0;
-      background: url('https://innovationhub.uwc.ac.za/jigspace/LoggerHeadTurtle/img/logger-head-turtle_xio2vp.png') center center / cover no-repeat;
-      animation: kenBurns 20s ease-in-out infinite alternate;
-      filter: brightness(0.55);
-    }
-
-    @keyframes kenBurns {
-      0%   { transform: scale(1)   translate(0, 0); }
-      100% { transform: scale(1.1) translate(-2%, -1%); }
-    }
-
-    /* Dark gradient overlay */
-    .embed-overlay {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(
-        180deg,
-        rgba(10, 26, 92, 0.7) 0%,
-        rgba(10, 26, 92, 0.3) 40%,
-        rgba(10, 26, 92, 0.5) 70%,
-        rgba(10, 26, 92, 0.85) 100%
-      );
-    }
-
-    /* Content */
-    .embed-content {
-      position: relative;
-      z-index: 2;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      text-align: center;
-      padding: 24px;
-      gap: 16px;
-    }
-
-    .embed-logo {
-      height: 48px;
-      opacity: 0.9;
-    }
-
-    .embed-title {
-      font-size: clamp(1.2rem, 4vw, 1.8rem);
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      line-height: 1.2;
-      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
-    }
-
-    .embed-subtitle {
-      font-size: clamp(0.75rem, 2vw, 0.95rem);
-      opacity: 0.8;
-      max-width: 500px;
-      line-height: 1.5;
-    }
-
-    /* CTA Button */
-    .embed-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 32px;
-      background: #bd9a4f;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 20px rgba(189, 154, 79, 0.4);
-      margin-top: 8px;
-    }
-
-    .embed-btn:hover {
-      transform: translateY(-2px) scale(1.03);
-      box-shadow: 0 6px 28px rgba(189, 154, 79, 0.55);
-      background: #c9a85c;
-    }
-
-    .embed-btn svg {
-      transition: transform 0.2s;
-    }
-
-    .embed-btn:hover svg {
-      transform: translateX(3px);
-    }
-
-    /* Preloader shimmer */
-    .embed-preloader {
-      position: absolute;
+    /* ── Full-screen preloader (matches dashboard preloader) ── */
+    .preloader {
+      position: fixed;
       inset: 0;
       background: #0a1a5c;
-      z-index: 10;
       display: flex;
       align-items: center;
       justify-content: center;
-      flex-direction: column;
-      gap: 16px;
-      transition: opacity 0.6s ease, visibility 0.6s ease;
+      z-index: 100;
+      transition: opacity 0.5s ease;
     }
 
-    .embed-preloader.hidden {
+    .preloader.fade-out {
       opacity: 0;
-      visibility: hidden;
+      pointer-events: none;
     }
 
-    .embed-preloader-bar {
-      width: 120px;
-      height: 3px;
-      background: rgba(255,255,255,0.15);
-      border-radius: 2px;
+    .preloader-content {
+      text-align: center;
+      width: 340px;
+      max-width: 90vw;
+    }
+
+    .preloader-logo {
+      width: 180px;
+      opacity: 0.95;
+      margin-bottom: 28px;
+      animation: logoPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes logoPulse {
+      0%, 100% { opacity: 0.95; }
+      50%      { opacity: 0.7; }
+    }
+
+    .preloader-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+      opacity: 0.95;
+    }
+
+    .preloader-subtitle {
+      font-size: 0.75rem;
+      opacity: 0.5;
+      margin-bottom: 24px;
+      line-height: 1.4;
+    }
+
+    .preloader-bar {
+      width: 100%;
+      height: 5px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
       overflow: hidden;
+      margin-bottom: 14px;
     }
 
-    .embed-preloader-fill {
-      width: 0%;
+    .preloader-fill {
       height: 100%;
-      background: #bd9a4f;
-      border-radius: 2px;
-      animation: preloaderGrow 1.5s ease-out forwards;
+      background: linear-gradient(90deg, #bd9a4f 0%, #d4b76a 50%, #bd9a4f 100%);
+      background-size: 200% 100%;
+      border-radius: 3px;
+      width: 0%;
+      animation: fillBar 3s ease-out forwards, shimmer 1.5s ease-in-out infinite;
     }
 
-    @keyframes preloaderGrow {
+    @keyframes fillBar {
       0%   { width: 0%; }
-      60%  { width: 70%; }
+      20%  { width: 25%; }
+      50%  { width: 55%; }
+      75%  { width: 80%; }
+      90%  { width: 92%; }
       100% { width: 100%; }
     }
 
-    .embed-preloader-text {
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .preloader-status {
       font-size: 0.7rem;
-      opacity: 0.5;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-
-    /* Badge */
-    .embed-badge {
-      position: absolute;
-      bottom: 12px;
-      right: 16px;
-      font-size: 0.6rem;
       opacity: 0.4;
-      z-index: 3;
-      letter-spacing: 0.5px;
-    }
-
-    .embed-badge a {
-      color: #fff;
-      text-decoration: none;
-    }
-
-    .embed-badge a:hover {
-      opacity: 1;
-    }
-
-    /* Partners strip */
-    .embed-partners {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      opacity: 0.6;
-      font-size: 0.65rem;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.8px;
       text-transform: uppercase;
+      transition: opacity 0.3s;
     }
 
-    .embed-partners-dot {
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background: #bd9a4f;
+    .preloader-skip {
+      margin-top: 32px;
+      font-size: 0.65rem;
+      opacity: 0.3;
+      letter-spacing: 0.5px;
+    }
+
+    .preloader-skip span {
+      border-bottom: 1px dotted rgba(255,255,255,0.3);
+      padding-bottom: 1px;
+    }
+
+    /* ── Decorative: subtle background turtle silhouette ── */
+    .preloader-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 99;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .preloader-bg-img {
+      position: absolute;
+      bottom: -10%;
+      right: -5%;
+      width: 45%;
+      max-width: 400px;
+      opacity: 0.04;
+      filter: brightness(0) invert(1);
+    }
+
+    /* ── Partners badge ── */
+    .preloader-partners {
+      position: fixed;
+      bottom: 16px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      z-index: 101;
+      font-size: 0.6rem;
+      opacity: 0.3;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
     }
   </style>
 </head>
-<body>
-  <!-- Preloader -->
-  <div class="embed-preloader" id="preloader">
-    <img src="https://innovationhub.uwc.ac.za/img/UIH_Logo_FA_white.png" alt="UWC" style="height:36px;opacity:0.8">
-    <div class="embed-preloader-bar">
-      <div class="embed-preloader-fill"></div>
-    </div>
-    <div class="embed-preloader-text">Loading preview...</div>
+<body onclick="goNow()">
+
+  <!-- Subtle background turtle -->
+  <div class="preloader-bg">
+    <img class="preloader-bg-img"
+         src="https://innovationhub.uwc.ac.za/jigspace/LoggerHeadTurtle/img/logger-head-turtle_xio2vp.png"
+         alt="">
   </div>
 
-  <!-- Main embed card -->
-  <div class="embed-container" id="embedCard" onclick="goToProject()">
-    <div class="embed-bg"></div>
-    <div class="embed-overlay"></div>
-    <div class="embed-content">
-      <img src="https://innovationhub.uwc.ac.za/img/UIH_Logo_FA_white.png" alt="UWC Immersive Zone" class="embed-logo">
-      <h1 class="embed-title">Interactive Loggerhead<br>Turtle Hatchlings</h1>
-      <p class="embed-subtitle">
-        Explore an interactive 3D learning experience about marine conservation
-        and the journey of loggerhead turtle hatchlings in the Western Cape.
-      </p>
-      <a href="https://innovationhub.uwc.ac.za/jigspace/LoggerHeadTurtle/"
-         target="_top"
-         class="embed-btn"
-         onclick="event.stopPropagation();">
-        Explore Project
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-          <polyline points="12 5 19 12 12 19"></polyline>
-        </svg>
-      </a>
-      <div class="embed-partners">
-        <span>UWC</span>
-        <span class="embed-partners-dot"></span>
-        <span>Faculty of Natural Sciences</span>
-        <span class="embed-partners-dot"></span>
-        <span>Immersive Zone</span>
+  <!-- Preloader -->
+  <div class="preloader" id="preloader">
+    <div class="preloader-content">
+      <img src="https://innovationhub.uwc.ac.za/img/UIH_Logo_FA_white.png"
+           alt="UWC Immersive Zone"
+           class="preloader-logo">
+      <div class="preloader-title">Interactive Loggerhead Turtle Hatchlings</div>
+      <div class="preloader-subtitle">
+        Marine conservation &middot; 3D learning experience
+      </div>
+      <div class="preloader-bar">
+        <div class="preloader-fill" id="progressFill"></div>
+      </div>
+      <div class="preloader-status" id="statusText">Loading project page...</div>
+      <div class="preloader-skip">
+        <span>Click anywhere to open now</span>
       </div>
     </div>
   </div>
 
-  <div class="embed-badge">
-    <a href="https://innovationhub.uwc.ac.za" target="_top">UWC Immersive Zone</a>
+  <div class="preloader-partners">
+    UWC &middot; Faculty of Natural Sciences &middot; Immersive Zone
   </div>
 
-  <!-- Google tag (gtag.js) — track embed views & clicks -->
+  <!-- Google tag (gtag.js) — track embed views & click-throughs -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-0Z287Y6Y1G"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -262,31 +194,62 @@
     gtag('js', new Date());
     gtag('config', 'G-0Z287Y6Y1G', { send_page_view: true });
 
-    // Track click-through
-    function goToProject() {
+    var TARGET_URL = 'https://innovationhub.uwc.ac.za/jigspace/LoggerHeadTurtle/';
+    var REDIRECT_DELAY = 3200;   // ms — matches progress bar animation
+    var hasNavigated = false;
+
+    // Status text updates
+    var statusEl = document.getElementById('statusText');
+    var statusSteps = [
+      { at: 600,  text: 'Connecting to InnovationHub...' },
+      { at: 1400, text: 'Preparing interactive experience...' },
+      { at: 2400, text: 'Almost ready...' },
+      { at: 3000, text: 'Redirecting...' }
+    ];
+
+    statusSteps.forEach(function(step) {
+      setTimeout(function() {
+        if (!hasNavigated && statusEl) {
+          statusEl.textContent = step.text;
+        }
+      }, step.at);
+    });
+
+    // Auto-redirect after progress bar completes
+    setTimeout(function() {
+      if (!hasNavigated) navigate();
+    }, REDIRECT_DELAY);
+
+    // Click anywhere = skip waiting, go now
+    function goNow() {
+      if (!hasNavigated) navigate();
+    }
+
+    function navigate() {
+      hasNavigated = true;
+
+      // Fire GA4 event
       gtag('event', 'embed_click_through', {
         event_category: 'engagement',
         event_label: 'Google Sites Embed',
         transport_type: 'beacon'
       });
-      window.open('https://innovationhub.uwc.ac.za/jigspace/LoggerHeadTurtle/', '_top');
+
+      // Fade out preloader
+      var pre = document.getElementById('preloader');
+      if (pre) pre.classList.add('fade-out');
+
+      // Navigate — break out of iframe with _top
+      setTimeout(function() {
+        window.open(TARGET_URL, '_top');
+      }, 300);
     }
 
-    // Hide preloader after image loads
-    var bg = new Image();
-    bg.src = 'https://innovationhub.uwc.ac.za/jigspace/LoggerHeadTurtle/img/logger-head-turtle_xio2vp.png';
-    bg.onload = function() {
-      setTimeout(function() {
-        document.getElementById('preloader').classList.add('hidden');
-      }, 800);
-    };
-    bg.onerror = function() {
-      document.getElementById('preloader').classList.add('hidden');
-    };
-    // Fallback: hide preloader after 3s regardless
-    setTimeout(function() {
-      document.getElementById('preloader').classList.add('hidden');
-    }, 3000);
+    // Prefetch the destination page so it loads faster after redirect
+    var prefetchLink = document.createElement('link');
+    prefetchLink.rel = 'prefetch';
+    prefetchLink.href = TARGET_URL;
+    document.head.appendChild(prefetchLink);
   </script>
 </body>
 </html>
