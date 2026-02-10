@@ -392,10 +392,11 @@
   // Data Loading — with caching & graceful refresh
   // ========================================
   async function loadDashboardData(period) {
-    showLoading(true);
-
-    // On first load there's no cached data, so the preloader covers us.
-    // On subsequent refreshes, the old data stays fully visible while we fetch.
+    // Only show the loading spinner on first load — subsequent auto-refreshes
+    // keep the old data fully visible while fetching in the background.
+    if (isFirstLoad) {
+      showLoading(true);
+    }
 
     try {
       var data = await callAPI('fetchAllDashboardData', { period: period });
@@ -974,10 +975,13 @@
 
     function getCountryColor(users) {
       if (!users || users === 0) return '#e2e8f0';
-      var intensity = Math.max(0.15, Math.min(1, users / maxUsers));
-      if (intensity < 0.3) return 'rgba(189, 154, 79, 0.35)';
-      if (intensity < 0.6) return 'rgba(0, 51, 102, 0.4)';
-      return 'rgba(10, 26, 92, ' + (0.4 + intensity * 0.55) + ')';
+      var intensity = Math.max(0.05, Math.min(1, users / maxUsers));
+      // 5-step vivid gradient: light gold → gold → teal → navy → deep navy
+      if (intensity < 0.15) return '#e8d5a3';      // pale gold
+      if (intensity < 0.35) return '#bd9a4f';       // UWC gold
+      if (intensity < 0.55) return '#1a8a7a';       // teal
+      if (intensity < 0.75) return '#003366';       // UWC blue
+      return '#0a1a5c';                              // deep navy
     }
 
     // Tooltip setup

@@ -2113,6 +2113,8 @@
 
   .geo-map-svg .geo-country.active {
     cursor: pointer;
+    stroke: rgba(255, 255, 255, 0.7);
+    stroke-width: 0.8;
   }
 
   .geo-legend {
@@ -2146,6 +2148,31 @@
     font-weight: 700;
     color: var(--uwc-blue);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Geo gradient scale legend */
+  .geo-gradient-legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 0 2px;
+  }
+
+  .geo-gradient-label {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+
+  .geo-gradient-bar {
+    width: 140px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(to right, #e2e8f0, #e8d5a3, #bd9a4f, #1a8a7a, #003366, #0a1a5c);
+    border: 1px solid var(--border-light);
   }
 
   /* Geo tooltip */
