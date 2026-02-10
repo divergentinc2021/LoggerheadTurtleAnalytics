@@ -32,6 +32,11 @@
   let currentPeriod = 'WEEKLY';
   let totalUsers = 0;
 
+  // Data cache — holds last successful API response per period
+  // Prevents white flashes on refresh by keeping stale data visible until new data arrives
+  let cachedData = {};
+  let isFirstLoad = true;
+
   // Auto-refresh config
   const SYNC_INTERVAL = 60; // seconds between data refreshes
   let syncCountdown = SYNC_INTERVAL;
@@ -384,27 +389,32 @@
   }
 
   // ========================================
-  // Data Loading
+  // Data Loading — with caching & graceful refresh
   // ========================================
   async function loadDashboardData(period) {
     showLoading(true);
 
-    // Fade out content during load to prevent visual jump
-    var content = document.getElementById('dashboardContent');
-    if (content) {
-      content.style.opacity = '0.5';
-      content.style.transition = 'opacity 0.2s ease';
-    }
+    // On first load there's no cached data, so the preloader covers us.
+    // On subsequent refreshes, the old data stays fully visible while we fetch.
 
     try {
       var data = await callAPI('fetchAllDashboardData', { period: period });
+
+      // Cache the successful response for this period
+      cachedData[period] = data;
+
+      // Apply data to UI with smooth transitions
       handleDashboardData(data);
+      isFirstLoad = false;
     } catch (error) {
-      handleError(error);
-    } finally {
-      // Fade back in
-      if (content) {
-        content.style.opacity = '1';
+      // If we have cached data for this period, keep showing it
+      if (cachedData[period] && !isFirstLoad) {
+        console.warn('[Dashboard] Refresh failed, keeping cached data:', error);
+        showLoading(false);
+        resetSyncCountdown();
+        // Don't touch the UI — stale data is better than no data
+      } else {
+        handleError(error);
       }
     }
   }
@@ -499,8 +509,15 @@
       return;
     }
 
-    document.getElementById('dateRangeDisplay').textContent = 'Error loading data — retrying...';
-    // Auto-retry once after 5 seconds
+    // If this is the first load (no cached data), show error and retry
+    if (isFirstLoad) {
+      document.getElementById('dateRangeDisplay').textContent = 'Error loading data — retrying...';
+    } else {
+      // We have cached data on screen — just show a subtle indicator
+      document.getElementById('dateRangeDisplay').textContent = 'Sync failed — retrying...';
+    }
+
+    // Auto-retry after 5 seconds
     setTimeout(function() {
       loadDashboardData(currentPeriod);
     }, 5000);
@@ -527,18 +544,31 @@
     }
   }
 
+  // Smoothly update a text element — only animate if value actually changed
+  function smoothSetText(id, newText) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.textContent === newText) return; // no change
+    el.style.transition = 'opacity 0.2s ease';
+    el.style.opacity = '0.3';
+    setTimeout(function() {
+      el.textContent = newText;
+      el.style.opacity = '1';
+    }, 200);
+  }
+
   function updateMetrics(metrics) {
     totalUsers = metrics.totalUsers;
 
-    document.getElementById('totalUsers').textContent = formatNumber(metrics.totalUsers);
-    document.getElementById('sessions').textContent = formatNumber(metrics.sessions);
-    document.getElementById('pageViews').textContent = formatNumber(metrics.pageViews);
-    document.getElementById('avgDuration').textContent = formatDuration(metrics.avgSessionDuration);
+    smoothSetText('totalUsers', formatNumber(metrics.totalUsers));
+    smoothSetText('sessions', formatNumber(metrics.sessions));
+    smoothSetText('pageViews', formatNumber(metrics.pageViews));
+    smoothSetText('avgDuration', formatDuration(metrics.avgSessionDuration));
 
     // Activity stats
-    document.getElementById('newUsersVal').textContent = formatNumber(metrics.newUsers);
-    document.getElementById('engagementVal').textContent = metrics.engagementRate + '%';
-    document.getElementById('bounceVal').textContent = metrics.bounceRate + '%';
+    smoothSetText('newUsersVal', formatNumber(metrics.newUsers));
+    smoothSetText('engagementVal', metrics.engagementRate + '%');
+    smoothSetText('bounceVal', metrics.bounceRate + '%');
 
     // Update comparison change indicators
     if (metrics.changes) {
@@ -620,26 +650,26 @@
       timeSeriesChart.data.datasets[0].data = [0];
       timeSeriesChart.data.datasets[1].data = [0];
       timeSeriesChart.data.datasets[2].data = [0];
-      timeSeriesChart.update('none');
+      timeSeriesChart.update();
       return;
     }
     timeSeriesChart.data.labels = data.labels;
     timeSeriesChart.data.datasets[0].data = data.users;
     timeSeriesChart.data.datasets[1].data = data.sessions;
     timeSeriesChart.data.datasets[2].data = data.pageViews;
-    timeSeriesChart.update('none');
+    timeSeriesChart.update();
   }
 
   function updateActivityChart(data) {
     if (!data.labels || data.labels.length === 0) {
       activityChart.data.labels = ['No data'];
       activityChart.data.datasets[0].data = [0];
-      activityChart.update('none');
+      activityChart.update();
       return;
     }
     activityChart.data.labels = data.labels;
     activityChart.data.datasets[0].data = data.users;
-    activityChart.update('none');
+    activityChart.update();
   }
 
   function updateDevicesChart(data) {
@@ -647,7 +677,7 @@
       devicesChart.data.labels = ['No data'];
       devicesChart.data.datasets[0].data = [0];
       devicesChart.data.datasets[0].backgroundColor = ['#e2e8f0'];
-      devicesChart.update('none');
+      devicesChart.update();
       return;
     }
     devicesChart.data.labels = data.labels;
@@ -656,39 +686,54 @@
     const deviceColors = data.labels.map((label, i) => chartColors[i % chartColors.length]);
     devicesChart.data.datasets[0].backgroundColor = deviceColors;
 
-    devicesChart.update('none');
+    devicesChart.update();
+  }
+
+  // Graceful table update — fades old content out, swaps HTML, fades in
+  function fadeUpdateElement(el, newHTML) {
+    if (!el) return;
+    // If content hasn't changed, skip the update entirely
+    if (el.innerHTML.trim() === newHTML.trim()) return;
+
+    el.style.transition = 'opacity 0.25s ease';
+    el.style.opacity = '0.3';
+    setTimeout(function() {
+      el.innerHTML = newHTML;
+      el.style.opacity = '1';
+    }, 250);
   }
 
   function updateTopPagesTable(pages) {
     const tbody = document.querySelector('#topPagesTable tbody');
 
     if (pages.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" class="loading-cell">No data available</td></tr>';
+      fadeUpdateElement(tbody, '<tr><td colspan="3" class="loading-cell">No data available</td></tr>');
       return;
     }
 
     const maxViews = Math.max(...pages.map(p => p.views));
 
-    tbody.innerHTML = pages.slice(0, 8).map(page => `
+    var html = pages.slice(0, 8).map(page => `
       <tr>
         <td class="page-title-cell" title="${escapeHtml(page.title)}">${escapeHtml(truncate(page.title, 50))}</td>
         <td>${formatNumber(page.views)}</td>
         <td>${formatDuration(page.avgDuration)}</td>
       </tr>
     `).join('');
+    fadeUpdateElement(tbody, html);
   }
 
   function updateCountriesTable(countries) {
     const tbody = document.querySelector('#countriesTable tbody');
 
     if (countries.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" class="loading-cell">No data available</td></tr>';
+      fadeUpdateElement(tbody, '<tr><td colspan="3" class="loading-cell">No data available</td></tr>');
       return;
     }
 
     const total = countries.reduce((sum, c) => sum + c.users, 0);
 
-    tbody.innerHTML = countries.slice(0, 8).map(country => {
+    var html = countries.slice(0, 8).map(country => {
       const pct = total > 0 ? ((country.users / total) * 100).toFixed(1) : 0;
       return `
         <tr>
@@ -703,6 +748,7 @@
         </tr>
       `;
     }).join('');
+    fadeUpdateElement(tbody, html);
   }
 
   // Custom tracked events — highlight with a tag
@@ -717,13 +763,13 @@
     const tbody = document.querySelector('#eventsTable tbody');
 
     if (!events || events.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" class="loading-cell">No events recorded</td></tr>';
+      fadeUpdateElement(tbody, '<tr><td colspan="3" class="loading-cell">No events recorded</td></tr>');
       return;
     }
 
     const maxCount = Math.max(...events.map(e => e.count));
 
-    tbody.innerHTML = events.slice(0, 15).map(ev => {
+    var html = events.slice(0, 15).map(ev => {
       const pct = maxCount > 0 ? ((ev.count / maxCount) * 100).toFixed(1) : 0;
       const isCustom = customEvents.indexOf(ev.name) !== -1;
       const tag = isCustom ? '<span class="event-custom-tag">TRACKED</span>' : '';
@@ -740,6 +786,7 @@
         </tr>
       `;
     }).join('');
+    fadeUpdateElement(tbody, html);
   }
 
   // ========================================
@@ -761,13 +808,13 @@
     if (!tbody) return;
 
     if (!data || !data.labels || data.labels.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" class="loading-cell">No data available</td></tr>';
+      fadeUpdateElement(tbody, '<tr><td colspan="3" class="loading-cell">No data available</td></tr>');
       return;
     }
 
     var total = data.values.reduce(function(sum, v) { return sum + v; }, 0);
 
-    tbody.innerHTML = data.labels.map(function(label, i) {
+    var html = data.labels.map(function(label, i) {
       var val = data.values[i];
       var pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
       var color = channelColors[label] || chartColors[i % chartColors.length];
@@ -780,6 +827,7 @@
         '<td>' + pct + '%<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%;background:' + color + '"></div></div></td>' +
       '</tr>';
     }).join('');
+    fadeUpdateElement(tbody, html);
   }
 
   // ========================================
@@ -790,12 +838,12 @@
     if (!data || !data.labels || data.labels.length === 0) {
       bounceSparkline.data.labels = ['No data'];
       bounceSparkline.data.datasets[0].data = [0];
-      bounceSparkline.update('none');
+      bounceSparkline.update();
       return;
     }
     bounceSparkline.data.labels = data.labels;
     bounceSparkline.data.datasets[0].data = data.bounceRates;
-    bounceSparkline.update('none');
+    bounceSparkline.update();
   }
 
   // ========================================
@@ -901,11 +949,15 @@
     var countLabel = document.getElementById('geoTotalCountries');
     if (!svg || !legend) return;
 
-    svg.innerHTML = '';
-    legend.innerHTML = '';
-
     if (!countries || countries.length === 0) {
-      svg.innerHTML = '<text x="400" y="200" text-anchor="middle" fill="#a0aec0" font-size="14" font-family="Inter,sans-serif">No geographic data available</text>';
+      // Only clear if we truly have no data
+      svg.style.transition = 'opacity 0.3s ease';
+      svg.style.opacity = '0.3';
+      setTimeout(function() {
+        svg.innerHTML = '<text x="400" y="200" text-anchor="middle" fill="#a0aec0" font-size="14" font-family="Inter,sans-serif">No geographic data available</text>';
+        svg.style.opacity = '1';
+      }, 300);
+      legend.innerHTML = '';
       if (countLabel) countLabel.textContent = '0 countries';
       return;
     }
@@ -939,68 +991,82 @@
     container.appendChild(tooltip);
 
     // Load and render the real world map
+    // Don't clear the old SVG until the new one is ready
     loadWorldMap().then(function(topo) {
       if (!topo) {
         svg.innerHTML = '<text x="400" y="200" text-anchor="middle" fill="#a0aec0" font-size="14">Map data unavailable</text>';
         return;
       }
 
-      var w = 800, h = 400;
-      var obj = topo.objects.countries;
-      var geoms = obj.geometries;
+      // Fade out old map, build new one, fade in
+      svg.style.transition = 'opacity 0.3s ease';
+      svg.style.opacity = '0.3';
 
-      geoms.forEach(function(geom) {
-        var id = geom.id; // ISO 3166-1 numeric
-        var name = (geom.properties && geom.properties.name) || isoToName[id] || '';
-        var users = countryMap[name] || 0;
+      setTimeout(function() {
+        svg.innerHTML = ''; // clear only after fade-out
 
-        var d = topoToSvgPath(topo.arcs, topo.transform, geom, w, h);
-        if (!d) return;
+        var w = 800, h = 400;
+        var obj = topo.objects.countries;
+        var geoms = obj.geometries;
 
-        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', d);
-        path.setAttribute('class', 'geo-country' + (users > 0 ? ' active' : ''));
-        path.setAttribute('fill', getCountryColor(users));
-        path.setAttribute('data-country', name);
-        path.setAttribute('data-users', users);
+        geoms.forEach(function(geom) {
+          var id = geom.id; // ISO 3166-1 numeric
+          var name = (geom.properties && geom.properties.name) || isoToName[id] || '';
+          var users = countryMap[name] || 0;
 
-        if (users > 0) {
-          path.addEventListener('mouseenter', function() {
-            tooltip.innerHTML = '<span class="geo-tooltip-country">' + escapeHtml(name) + '</span><span class="geo-tooltip-value">' + formatNumber(users) + ' users</span>';
-            tooltip.style.display = 'block';
-          });
-          path.addEventListener('mousemove', function(e) {
-            var rect = container.getBoundingClientRect();
-            tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
-            tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
-          });
-          path.addEventListener('mouseleave', function() {
-            tooltip.style.display = 'none';
-          });
-        }
+          var d = topoToSvgPath(topo.arcs, topo.transform, geom, w, h);
+          if (!d) return;
 
-        svg.appendChild(path);
-      });
+          var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', d);
+          path.setAttribute('class', 'geo-country' + (users > 0 ? ' active' : ''));
+          path.setAttribute('fill', getCountryColor(users));
+          path.setAttribute('data-country', name);
+          path.setAttribute('data-users', users);
 
-      // Attribution
-      var attr = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      attr.setAttribute('x', '795'); attr.setAttribute('y', '395');
-      attr.setAttribute('text-anchor', 'end'); attr.setAttribute('fill', '#cbd5e1');
-      attr.setAttribute('font-size', '8'); attr.setAttribute('font-family', 'Inter,sans-serif');
-      attr.textContent = 'Natural Earth';
-      svg.appendChild(attr);
+          if (users > 0) {
+            path.addEventListener('mouseenter', function() {
+              tooltip.innerHTML = '<span class="geo-tooltip-country">' + escapeHtml(name) + '</span><span class="geo-tooltip-value">' + formatNumber(users) + ' users</span>';
+              tooltip.style.display = 'block';
+            });
+            path.addEventListener('mousemove', function(e) {
+              var rect = container.getBoundingClientRect();
+              tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
+              tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
+            });
+            path.addEventListener('mouseleave', function() {
+              tooltip.style.display = 'none';
+            });
+          }
+
+          svg.appendChild(path);
+        });
+
+        // Attribution
+        var attr = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        attr.setAttribute('x', '795'); attr.setAttribute('y', '395');
+        attr.setAttribute('text-anchor', 'end'); attr.setAttribute('fill', '#cbd5e1');
+        attr.setAttribute('font-size', '8'); attr.setAttribute('font-family', 'Inter,sans-serif');
+        attr.textContent = 'Natural Earth';
+        svg.appendChild(attr);
+
+        // Fade in the new map
+        svg.style.opacity = '1';
+      }, 300);
     });
 
-    // Legend — top 5 countries
+    // Legend — fade update
     var total = countries.reduce(function(sum, c) { return sum + c.users; }, 0);
+    var legendHTML = '';
     countries.slice(0, 5).forEach(function(c) {
       var pct = total > 0 ? ((c.users / total) * 100).toFixed(0) : 0;
       var color = getCountryColor(c.users);
-      legend.innerHTML += '<span class="geo-legend-item">' +
+      legendHTML += '<span class="geo-legend-item">' +
         '<span class="geo-legend-dot" style="background:' + color + '"></span>' +
         escapeHtml(c.country) + ' <span class="geo-legend-count">' + pct + '%</span>' +
       '</span>';
     });
+    fadeUpdateElement(legend, legendHTML);
   }
 
   // ========================================
