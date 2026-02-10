@@ -944,6 +944,9 @@
     }
   }
 
+  // Track whether the SVG map paths have been built yet
+  var geoMapBuilt = false;
+
   function updateGeoMap(countries) {
     var svg = document.getElementById('geoMapSvg');
     var legend = document.getElementById('geoLegend');
@@ -951,15 +954,16 @@
     if (!svg || !legend) return;
 
     if (!countries || countries.length === 0) {
-      // Only clear if we truly have no data
-      svg.style.transition = 'opacity 0.3s ease';
-      svg.style.opacity = '0.3';
-      setTimeout(function() {
-        svg.innerHTML = '<text x="400" y="200" text-anchor="middle" fill="#a0aec0" font-size="14" font-family="Inter,sans-serif">No geographic data available</text>';
-        svg.style.opacity = '1';
-      }, 300);
-      legend.innerHTML = '';
       if (countLabel) countLabel.textContent = '0 countries';
+      // If map is already built, just gray out all countries — no DOM thrash
+      if (geoMapBuilt) {
+        var paths = svg.querySelectorAll('.geo-country');
+        paths.forEach(function(p) {
+          p.setAttribute('fill', '#e2e8f0');
+          p.classList.remove('active');
+        });
+      }
+      legend.innerHTML = '';
       return;
     }
 
@@ -984,82 +988,103 @@
       return '#0a1a5c';                              // deep navy
     }
 
-    // Tooltip setup
+    // If map is already built, just update fills in place — no rebuild, no flash
+    if (geoMapBuilt) {
+      var paths = svg.querySelectorAll('.geo-country');
+      paths.forEach(function(p) {
+        var name = p.getAttribute('data-country');
+        var users = countryMap[name] || 0;
+        p.setAttribute('fill', getCountryColor(users));
+        p.setAttribute('data-users', users);
+        if (users > 0) {
+          p.classList.add('active');
+        } else {
+          p.classList.remove('active');
+        }
+      });
+      updateGeoLegend(legend, countries, getCountryColor);
+      return;
+    }
+
+    // ── First render — build the SVG map once, never again ──
     var container = document.getElementById('geoMapContainer');
-    var oldTooltip = document.getElementById('geoTooltip');
-    if (oldTooltip) oldTooltip.remove();
+
+    // Tooltip element (created once)
     var tooltip = document.createElement('div');
     tooltip.className = 'geo-tooltip';
     tooltip.id = 'geoTooltip';
     container.style.position = 'relative';
     container.appendChild(tooltip);
 
-    // Load and render the real world map
-    // Don't clear the old SVG until the new one is ready
+    // Delegated tooltip — ONE listener on the SVG, reads data-* live
+    // No per-path listeners, no cloning, no rebinding on refresh
+    svg.addEventListener('mouseover', function(e) {
+      var path = e.target.closest('.geo-country.active');
+      if (!path) return;
+      var name = path.getAttribute('data-country');
+      var users = path.getAttribute('data-users');
+      tooltip.innerHTML = '<span class="geo-tooltip-country">' + escapeHtml(name) + '</span><span class="geo-tooltip-value">' + formatNumber(parseInt(users)) + ' users</span>';
+      tooltip.style.display = 'block';
+    });
+    svg.addEventListener('mousemove', function(e) {
+      if (tooltip.style.display === 'block') {
+        var rect = container.getBoundingClientRect();
+        tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
+        tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
+      }
+    });
+    svg.addEventListener('mouseout', function(e) {
+      var path = e.target.closest('.geo-country.active');
+      if (!path) return;
+      // Only hide if we're actually leaving the path (not entering a child)
+      if (!path.contains(e.relatedTarget)) {
+        tooltip.style.display = 'none';
+      }
+    });
+
     loadWorldMap().then(function(topo) {
       if (!topo) {
         svg.innerHTML = '<text x="400" y="200" text-anchor="middle" fill="#a0aec0" font-size="14">Map data unavailable</text>';
         return;
       }
 
-      // Fade out old map, build new one, fade in
-      svg.style.transition = 'opacity 0.3s ease';
-      svg.style.opacity = '0.3';
+      var w = 800, h = 400;
+      var geoms = topo.objects.countries.geometries;
 
-      setTimeout(function() {
-        svg.innerHTML = ''; // clear only after fade-out
+      geoms.forEach(function(geom) {
+        var id = geom.id;
+        var name = (geom.properties && geom.properties.name) || isoToName[id] || '';
+        var users = countryMap[name] || 0;
 
-        var w = 800, h = 400;
-        var obj = topo.objects.countries;
-        var geoms = obj.geometries;
+        var d = topoToSvgPath(topo.arcs, topo.transform, geom, w, h);
+        if (!d) return;
 
-        geoms.forEach(function(geom) {
-          var id = geom.id; // ISO 3166-1 numeric
-          var name = (geom.properties && geom.properties.name) || isoToName[id] || '';
-          var users = countryMap[name] || 0;
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('class', 'geo-country' + (users > 0 ? ' active' : ''));
+        path.setAttribute('fill', getCountryColor(users));
+        path.setAttribute('data-country', name);
+        path.setAttribute('data-users', users);
+        svg.appendChild(path);
+      });
 
-          var d = topoToSvgPath(topo.arcs, topo.transform, geom, w, h);
-          if (!d) return;
+      // Attribution
+      var attr = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      attr.setAttribute('x', '795'); attr.setAttribute('y', '395');
+      attr.setAttribute('text-anchor', 'end'); attr.setAttribute('fill', '#cbd5e1');
+      attr.setAttribute('font-size', '8'); attr.setAttribute('font-family', 'Inter,sans-serif');
+      attr.textContent = 'Natural Earth';
+      svg.appendChild(attr);
 
-          var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('d', d);
-          path.setAttribute('class', 'geo-country' + (users > 0 ? ' active' : ''));
-          path.setAttribute('fill', getCountryColor(users));
-          path.setAttribute('data-country', name);
-          path.setAttribute('data-users', users);
-
-          if (users > 0) {
-            path.addEventListener('mouseenter', function() {
-              tooltip.innerHTML = '<span class="geo-tooltip-country">' + escapeHtml(name) + '</span><span class="geo-tooltip-value">' + formatNumber(users) + ' users</span>';
-              tooltip.style.display = 'block';
-            });
-            path.addEventListener('mousemove', function(e) {
-              var rect = container.getBoundingClientRect();
-              tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
-              tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
-            });
-            path.addEventListener('mouseleave', function() {
-              tooltip.style.display = 'none';
-            });
-          }
-
-          svg.appendChild(path);
-        });
-
-        // Attribution
-        var attr = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        attr.setAttribute('x', '795'); attr.setAttribute('y', '395');
-        attr.setAttribute('text-anchor', 'end'); attr.setAttribute('fill', '#cbd5e1');
-        attr.setAttribute('font-size', '8'); attr.setAttribute('font-family', 'Inter,sans-serif');
-        attr.textContent = 'Natural Earth';
-        svg.appendChild(attr);
-
-        // Fade in the new map
-        svg.style.opacity = '1';
-      }, 300);
+      geoMapBuilt = true;
     });
 
-    // Legend — fade update
+    // Update legend
+    updateGeoLegend(legend, countries, getCountryColor);
+  }
+
+  // Update the top-5 country legend below the gradient bar
+  function updateGeoLegend(legend, countries, getCountryColor) {
     var total = countries.reduce(function(sum, c) { return sum + c.users; }, 0);
     var legendHTML = '';
     countries.slice(0, 5).forEach(function(c) {
