@@ -2093,28 +2093,11 @@
     height: 100%;
   }
 
-  .geo-map-svg {
+  .geo-map-canvas {
     flex: 1;
     width: 100%;
     min-height: 200px;
-  }
-
-  .geo-map-svg .geo-country {
-    /* fill is set per-country via JS inline attribute — do NOT set fill here */
-    stroke: #ffffff;
-    stroke-width: 0.5;
-    transition: fill 0.3s ease, opacity 0.2s ease;
     cursor: default;
-  }
-
-  .geo-map-svg .geo-country:hover {
-    opacity: 0.8;
-  }
-
-  .geo-map-svg .geo-country.active {
-    cursor: pointer;
-    stroke: rgba(255, 255, 255, 0.7);
-    stroke-width: 0.8;
   }
 
   .geo-legend {

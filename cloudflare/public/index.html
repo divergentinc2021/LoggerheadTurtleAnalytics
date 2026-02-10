@@ -544,9 +544,8 @@
           <span class="chart-period" id="geoTotalCountries">—</span>
         </div>
         <div class="geo-map-container" id="geoMapContainer">
-          <svg id="geoMapSvg" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet" class="geo-map-svg">
-            <!-- Simplified world map paths — major regions -->
-          </svg>
+          <canvas id="geoMapCanvas" width="800" height="400" class="geo-map-canvas"></canvas>
+          <div class="geo-tooltip" id="geoTooltip"></div>
           <div class="geo-gradient-legend" id="geoGradientLegend">
             <span class="geo-gradient-label">Fewer</span>
             <div class="geo-gradient-bar"></div>

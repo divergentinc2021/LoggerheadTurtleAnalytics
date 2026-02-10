@@ -907,49 +907,11 @@
     '398': 'Kazakhstan', '860': 'Uzbekistan'
   };
 
-  // Lightweight equirectangular projection for SVG
+  // Lightweight equirectangular projection
   function projectGeo(lon, lat, w, h) {
     var x = (lon + 180) * (w / 360);
     var y = (90 - lat) * (h / 180);
     return [x, y];
-  }
-
-  // Convert TopoJSON geometry to SVG path string
-  function topoToSvgPath(arcs, transform, geometry, w, h) {
-    var sx = transform.scale[0], sy = transform.scale[1];
-    var tx = transform.translate[0], ty = transform.translate[1];
-
-    function decodeArc(arcIdx) {
-      var rev = arcIdx < 0;
-      var arc = arcs[rev ? ~arcIdx : arcIdx];
-      var coords = [], x = 0, y = 0;
-      for (var i = 0; i < arc.length; i++) {
-        x += arc[i][0]; y += arc[i][1];
-        coords.push(projectGeo(x * sx + tx, y * sy + ty, w, h));
-      }
-      if (rev) coords.reverse();
-      return coords;
-    }
-
-    function ringToPath(ring) {
-      var pts = [];
-      for (var i = 0; i < ring.length; i++) {
-        var arcCoords = decodeArc(ring[i]);
-        // Skip first point of subsequent arcs (shared with previous)
-        pts = pts.concat(i === 0 ? arcCoords : arcCoords.slice(1));
-      }
-      return 'M' + pts.map(function(p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L') + 'Z';
-    }
-
-    var paths = [];
-    if (geometry.type === 'Polygon') {
-      geometry.arcs.forEach(function(ring) { paths.push(ringToPath(ring)); });
-    } else if (geometry.type === 'MultiPolygon') {
-      geometry.arcs.forEach(function(polygon) {
-        polygon.forEach(function(ring) { paths.push(ringToPath(ring)); });
-      });
-    }
-    return paths.join(' ');
   }
 
   async function loadWorldMap() {
@@ -965,25 +927,21 @@
     }
   }
 
-  // Track whether the SVG map paths have been built yet
-  var geoMapBuilt = false;
+  // ── Canvas-based geo map ──
+  // Stores decoded country geometry as plain arrays — zero DOM nodes
+  var geoCountryPaths = null;   // [{name, rings, users}]  — built once from TopoJSON
+  var geoCanvasReady = false;
+  var geoTooltipBound = false;
 
   function updateGeoMap(countries) {
-    var svg = document.getElementById('geoMapSvg');
+    var canvas = document.getElementById('geoMapCanvas');
     var legend = document.getElementById('geoLegend');
     var countLabel = document.getElementById('geoTotalCountries');
-    if (!svg || !legend) return;
+    if (!canvas || !legend) return;
 
     if (!countries || countries.length === 0) {
       if (countLabel) countLabel.textContent = '0 countries';
-      // If map is already built, just gray out all countries — no DOM thrash
-      if (geoMapBuilt) {
-        var paths = svg.querySelectorAll('.geo-country');
-        paths.forEach(function(p) {
-          p.setAttribute('fill', '#e2e8f0');
-          p.classList.remove('active');
-        });
-      }
+      if (geoCanvasReady) drawGeoCanvas(canvas, {}, 0);
       legend.innerHTML = '';
       return;
     }
@@ -998,119 +956,209 @@
       if (c.users > maxUsers) maxUsers = c.users;
     });
 
-    function getCountryColor(users) {
-      if (!users || users === 0) return '#e2e8f0';
-      var intensity = Math.max(0.05, Math.min(1, users / maxUsers));
-      // 5-step vivid gradient: light gold → gold → teal → navy → deep navy
-      if (intensity < 0.15) return '#e8d5a3';      // pale gold
-      if (intensity < 0.35) return '#bd9a4f';       // UWC gold
-      if (intensity < 0.55) return '#1a8a7a';       // teal
-      if (intensity < 0.75) return '#003366';       // UWC blue
-      return '#0a1a5c';                              // deep navy
-    }
-
-    // If map is already built, just update fills in place — no rebuild, no flash
-    if (geoMapBuilt) {
-      var paths = svg.querySelectorAll('.geo-country');
-      paths.forEach(function(p) {
-        var name = p.getAttribute('data-country');
-        var users = countryMap[name] || 0;
-        p.setAttribute('fill', getCountryColor(users));
-        p.setAttribute('data-users', users);
-        if (users > 0) {
-          p.classList.add('active');
-        } else {
-          p.classList.remove('active');
-        }
-      });
-      updateGeoLegend(legend, countries, getCountryColor);
+    // If geometry is already decoded, just redraw — no DOM work at all
+    if (geoCanvasReady) {
+      drawGeoCanvas(canvas, countryMap, maxUsers);
+      updateGeoLegend(legend, countries, maxUsers);
       return;
     }
 
-    // ── First render — build the SVG map once, never again ──
-    var container = document.getElementById('geoMapContainer');
-
-    // Tooltip element (created once)
-    var tooltip = document.createElement('div');
-    tooltip.className = 'geo-tooltip';
-    tooltip.id = 'geoTooltip';
-    container.style.position = 'relative';
-    container.appendChild(tooltip);
-
-    // Delegated tooltip — ONE listener on the SVG, reads data-* live
-    // No per-path listeners, no cloning, no rebinding on refresh
-    svg.addEventListener('mouseover', function(e) {
-      var path = e.target.closest('.geo-country.active');
-      if (!path) return;
-      var name = path.getAttribute('data-country');
-      var users = path.getAttribute('data-users');
-      tooltip.innerHTML = '<span class="geo-tooltip-country">' + escapeHtml(name) + '</span><span class="geo-tooltip-value">' + formatNumber(parseInt(users)) + ' users</span>';
-      tooltip.style.display = 'block';
-    });
-    svg.addEventListener('mousemove', function(e) {
-      if (tooltip.style.display === 'block') {
-        var rect = container.getBoundingClientRect();
-        tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
-        tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
-      }
-    });
-    svg.addEventListener('mouseout', function(e) {
-      var path = e.target.closest('.geo-country.active');
-      if (!path) return;
-      // Only hide if we're actually leaving the path (not entering a child)
-      if (!path.contains(e.relatedTarget)) {
-        tooltip.style.display = 'none';
-      }
-    });
-
+    // ── First call: load TopoJSON, decode geometry, draw, bind tooltip ──
     loadWorldMap().then(function(topo) {
-      if (!topo) {
-        svg.innerHTML = '<text x="400" y="200" text-anchor="middle" fill="#a0aec0" font-size="14">Map data unavailable</text>';
-        return;
-      }
+      if (!topo) return;
 
       var w = 800, h = 400;
       var geoms = topo.objects.countries.geometries;
 
+      // Decode all country geometry into plain coordinate arrays (no DOM nodes)
+      geoCountryPaths = [];
       geoms.forEach(function(geom) {
         var id = geom.id;
         var name = (geom.properties && geom.properties.name) || isoToName[id] || '';
-        var users = countryMap[name] || 0;
-
-        var d = topoToSvgPath(topo.arcs, topo.transform, geom, w, h);
-        if (!d) return;
-
-        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', d);
-        path.setAttribute('class', 'geo-country' + (users > 0 ? ' active' : ''));
-        path.setAttribute('fill', getCountryColor(users));
-        path.setAttribute('data-country', name);
-        path.setAttribute('data-users', users);
-        svg.appendChild(path);
+        var rings = topoToRings(topo.arcs, topo.transform, geom, w, h);
+        if (rings.length === 0) return;
+        geoCountryPaths.push({ name: name, rings: rings });
       });
 
-      // Attribution
-      var attr = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      attr.setAttribute('x', '795'); attr.setAttribute('y', '395');
-      attr.setAttribute('text-anchor', 'end'); attr.setAttribute('fill', '#cbd5e1');
-      attr.setAttribute('font-size', '8'); attr.setAttribute('font-family', 'Inter,sans-serif');
-      attr.textContent = 'Natural Earth';
-      svg.appendChild(attr);
-
-      geoMapBuilt = true;
+      geoCanvasReady = true;
+      drawGeoCanvas(canvas, countryMap, maxUsers);
+      bindGeoTooltip(canvas);
     });
 
     // Update legend
-    updateGeoLegend(legend, countries, getCountryColor);
+    updateGeoLegend(legend, countries, maxUsers);
+  }
+
+  // Convert TopoJSON geometry to plain coordinate ring arrays (no SVG path strings)
+  function topoToRings(arcs, transform, geometry, w, h) {
+    var sx = transform.scale[0], sy = transform.scale[1];
+    var tx = transform.translate[0], ty = transform.translate[1];
+
+    function decodeArc(arcIdx) {
+      var rev = arcIdx < 0;
+      var arc = arcs[rev ? ~arcIdx : arcIdx];
+      var coords = [], x = 0, y = 0;
+      for (var i = 0; i < arc.length; i++) {
+        x += arc[i][0]; y += arc[i][1];
+        coords.push(projectGeo(x * sx + tx, y * sy + ty, w, h));
+      }
+      if (rev) coords.reverse();
+      return coords;
+    }
+
+    function decodeRing(ring) {
+      var pts = [];
+      for (var i = 0; i < ring.length; i++) {
+        var arcCoords = decodeArc(ring[i]);
+        pts = pts.concat(i === 0 ? arcCoords : arcCoords.slice(1));
+      }
+      return pts;
+    }
+
+    var rings = [];
+    if (geometry.type === 'Polygon') {
+      geometry.arcs.forEach(function(ring) {
+        var pts = decodeRing(ring);
+        if (pts.length > 0) rings.push(pts);
+      });
+    } else if (geometry.type === 'MultiPolygon') {
+      geometry.arcs.forEach(function(polygon) {
+        polygon.forEach(function(ring) {
+          var pts = decodeRing(ring);
+          if (pts.length > 0) rings.push(pts);
+        });
+      });
+    }
+    return rings;
+  }
+
+  function getCountryColor(users, maxUsers) {
+    if (!users || users === 0) return '#e2e8f0';
+    var intensity = Math.max(0.05, Math.min(1, users / maxUsers));
+    if (intensity < 0.15) return '#e8d5a3';      // pale gold
+    if (intensity < 0.35) return '#bd9a4f';       // UWC gold
+    if (intensity < 0.55) return '#1a8a7a';       // teal
+    if (intensity < 0.75) return '#003366';       // UWC blue
+    return '#0a1a5c';                              // deep navy
+  }
+
+  // Draw entire map to canvas — pure pixel work, zero DOM manipulation
+  function drawGeoCanvas(canvas, countryMap, maxUsers) {
+    var ctx = canvas.getContext('2d');
+    var w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    if (!geoCountryPaths) return;
+
+    // Store current countryMap on the canvas element for tooltip hit-testing
+    canvas._countryMap = countryMap;
+    canvas._maxUsers = maxUsers;
+
+    for (var i = 0; i < geoCountryPaths.length; i++) {
+      var country = geoCountryPaths[i];
+      var users = countryMap[country.name] || 0;
+      var fill = getCountryColor(users, maxUsers);
+
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = users > 0 ? 'rgba(255,255,255,0.7)' : '#ffffff';
+      ctx.lineWidth = users > 0 ? 0.8 : 0.5;
+
+      for (var r = 0; r < country.rings.length; r++) {
+        var ring = country.rings[r];
+        ctx.beginPath();
+        ctx.moveTo(ring[0][0], ring[0][1]);
+        for (var p = 1; p < ring.length; p++) {
+          ctx.lineTo(ring[p][0], ring[p][1]);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    // Attribution text
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '8px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Natural Earth', w - 5, h - 5);
+  }
+
+  // Tooltip via canvas hit-testing — checks which country polygon contains the mouse point
+  function bindGeoTooltip(canvas) {
+    if (geoTooltipBound) return;
+    geoTooltipBound = true;
+
+    var container = document.getElementById('geoMapContainer');
+    var tooltip = document.getElementById('geoTooltip');
+    if (!tooltip || !container) return;
+
+    function getCanvasPoint(e) {
+      var rect = canvas.getBoundingClientRect();
+      var scaleX = canvas.width / rect.width;
+      var scaleY = canvas.height / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    // Point-in-polygon using ray casting
+    function pointInRing(px, py, ring) {
+      var inside = false;
+      for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        var xi = ring[i][0], yi = ring[i][1];
+        var xj = ring[j][0], yj = ring[j][1];
+        if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    }
+
+    function findCountry(px, py) {
+      if (!geoCountryPaths) return null;
+      var countryMap = canvas._countryMap || {};
+      for (var i = 0; i < geoCountryPaths.length; i++) {
+        var c = geoCountryPaths[i];
+        var users = countryMap[c.name] || 0;
+        if (users === 0) continue; // only tooltip for active countries
+        for (var r = 0; r < c.rings.length; r++) {
+          if (pointInRing(px, py, c.rings[r])) return c;
+        }
+      }
+      return null;
+    }
+
+    canvas.addEventListener('mousemove', function(e) {
+      var pt = getCanvasPoint(e);
+      var hit = findCountry(pt.x, pt.y);
+      if (hit) {
+        var users = (canvas._countryMap || {})[hit.name] || 0;
+        tooltip.innerHTML = '<span class="geo-tooltip-country">' + escapeHtml(hit.name) + '</span><span class="geo-tooltip-value">' + formatNumber(users) + ' users</span>';
+        tooltip.style.display = 'block';
+        var cRect = container.getBoundingClientRect();
+        tooltip.style.left = (e.clientX - cRect.left + 10) + 'px';
+        tooltip.style.top = (e.clientY - cRect.top - 30) + 'px';
+        canvas.style.cursor = 'pointer';
+      } else {
+        tooltip.style.display = 'none';
+        canvas.style.cursor = 'default';
+      }
+    });
+
+    canvas.addEventListener('mouseleave', function() {
+      tooltip.style.display = 'none';
+      canvas.style.cursor = 'default';
+    });
   }
 
   // Update the top-5 country legend below the gradient bar
-  function updateGeoLegend(legend, countries, getCountryColor) {
+  function updateGeoLegend(legend, countries, maxUsers) {
     var total = countries.reduce(function(sum, c) { return sum + c.users; }, 0);
     var legendHTML = '';
     countries.slice(0, 5).forEach(function(c) {
       var pct = total > 0 ? ((c.users / total) * 100).toFixed(0) : 0;
-      var color = getCountryColor(c.users);
+      var color = getCountryColor(c.users, maxUsers);
       legendHTML += '<span class="geo-legend-item">' +
         '<span class="geo-legend-dot" style="background:' + color + '"></span>' +
         escapeHtml(c.country) + ' <span class="geo-legend-count">' + pct + '%</span>' +
