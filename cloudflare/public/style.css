@@ -957,7 +957,6 @@
     border: 1px solid var(--border-light);
     min-width: 0;
     overflow: hidden;
-    min-height: 320px;
   }
 
   .chart-header {
@@ -1007,8 +1006,14 @@
   }
 
   .chart-body {
-    height: 250px;
+    height: 220px;
+    max-height: 220px;
     position: relative;
+    overflow: hidden;
+  }
+
+  .chart-body canvas {
+    max-height: 100%;
   }
 
   .chart-body-centered {
@@ -1070,8 +1075,8 @@
   }
 
   .activity-chart {
-    height: 120px;
-    min-height: 120px;
+    height: 100px;
+    max-height: 100px;
   }
 
   /* Breakdown Card */
@@ -1112,8 +1117,8 @@
 
   /* Devices Card */
   .devices-content {
-    height: 200px;
-    min-height: 200px;
+    height: 180px;
+    max-height: 180px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1189,7 +1194,7 @@
 
   .table-body {
     padding: var(--space-md);
-    height: 300px;
+    max-height: 280px;
     overflow-y: auto;
   }
 
@@ -1858,6 +1863,7 @@
   .chart-journey-inline {
     display: flex;
     flex-direction: column;
+    max-height: 340px;
   }
 
   .journey-flow-compact {
@@ -1978,7 +1984,9 @@
   .table-card-combined .table-body-combined {
     display: flex;
     gap: 0;
-    height: 300px;
+    height: 280px;
+    max-height: 280px;
+    overflow-y: auto;
   }
 
   .table-half {
@@ -2065,7 +2073,8 @@
      Geographic Map
      ======================================== */
   .chart-geo-map {
-    min-height: 320px;
+    min-height: 280px;
+    max-height: 380px;
   }
 
   .geo-map-container {

@@ -801,60 +801,99 @@
   // ========================================
   // Geographic Map
   // ========================================
-  // Simplified world map — country name → SVG path data
-  // Using rough continental outlines for visual representation
-  var geoCountryPaths = {
-    'South Africa': 'M485,340 L500,330 L515,335 L520,345 L515,360 L505,365 L490,360 L480,350 Z',
-    'United States': 'M120,140 L200,130 L220,145 L210,170 L190,180 L150,175 L120,165 Z',
-    'United Kingdom': 'M430,115 L440,105 L445,115 L440,125 L435,125 Z',
-    'India': 'M590,200 L610,180 L625,190 L620,230 L605,250 L590,240 L585,215 Z',
-    'Germany': 'M460,115 L470,110 L475,120 L470,130 L460,125 Z',
-    'Brazil': 'M220,260 L260,240 L280,260 L270,300 L240,320 L210,300 L200,270 Z',
-    'Canada': 'M100,70 L220,60 L240,80 L220,110 L180,115 L130,110 L100,95 Z',
-    'Australia': 'M660,310 L720,300 L740,320 L730,350 L700,360 L670,345 L660,325 Z',
-    'France': 'M440,125 L455,120 L460,130 L455,140 L445,140 L438,135 Z',
-    'Netherlands': 'M450,110 L460,108 L462,115 L455,118 L450,115 Z',
-    'Japan': 'M720,160 L725,150 L730,155 L728,170 L722,175 L718,165 Z',
-    'Nigeria': 'M460,240 L475,235 L480,245 L475,255 L462,255 L458,248 Z',
-    'Kenya': 'M520,250 L530,245 L535,255 L530,265 L520,260 Z',
-    'China': 'M620,140 L680,130 L700,150 L690,180 L650,190 L620,175 L615,155 Z',
-    'Russia': 'M480,50 L700,40 L750,70 L720,100 L600,110 L500,100 L470,75 Z',
-    'Mexico': 'M120,185 L160,180 L170,200 L150,215 L130,210 L115,200 Z',
-    'Italy': 'M465,130 L470,125 L475,135 L472,150 L467,148 L464,140 Z',
-    'Spain': 'M425,140 L445,135 L450,145 L442,150 L428,150 L422,145 Z',
-    'Egypt': 'M500,190 L520,185 L525,200 L515,210 L500,205 Z',
-    'Indonesia': 'M640,260 L680,255 L700,265 L690,275 L650,275 L635,270 Z',
-    'South Korea': 'M705,155 L712,150 L715,158 L710,165 L705,162 Z',
-    'Turkey': 'M500,145 L530,140 L540,150 L525,155 L500,155 Z',
-    'Argentina': 'M230,320 L250,310 L255,340 L245,370 L235,380 L225,360 L220,335 Z',
-    'Saudi Arabia': 'M530,195 L555,185 L565,200 L555,215 L535,215 L525,205 Z',
-    'Thailand': 'M635,215 L645,210 L650,225 L645,240 L637,235 L633,225 Z',
-    'Zimbabwe': 'M510,330 L520,325 L525,335 L520,340 L510,338 Z',
-    'Mozambique': 'M525,325 L535,320 L538,340 L530,350 L522,345 Z',
-    'Tanzania': 'M520,270 L535,265 L540,280 L530,290 L518,285 Z',
-    'Namibia': 'M475,330 L490,325 L495,340 L490,355 L478,350 L472,340 Z',
-    'Botswana': 'M495,330 L510,325 L515,340 L508,350 L495,345 Z',
-    'Ghana': 'M445,245 L455,240 L458,252 L452,258 L445,255 Z',
-    'Zambia': 'M500,300 L520,295 L525,310 L515,320 L500,315 Z',
-    'Uganda': 'M515,250 L525,245 L530,255 L525,260 L515,258 Z',
-    'Ethiopia': 'M530,230 L550,225 L555,240 L545,250 L530,245 Z',
-    'Philippines': 'M690,220 L700,215 L705,230 L698,240 L690,235 Z',
-    'Vietnam': 'M650,200 L658,195 L663,210 L658,230 L650,225 L648,210 Z',
-    'Malaysia': 'M645,250 L665,248 L670,255 L660,260 L645,258 Z',
-    'Pakistan': 'M575,175 L595,168 L600,185 L590,195 L575,190 Z',
-    'Bangladesh': 'M610,195 L620,190 L623,200 L618,205 L610,202 Z',
-    'Poland': 'M470,105 L485,100 L490,110 L480,118 L468,115 Z',
-    'Sweden': 'M465,70 L475,60 L480,80 L475,95 L465,90 Z',
-    'Norway': 'M455,55 L465,45 L475,55 L470,75 L460,80 L455,70 Z',
-    'Colombia': 'M195,230 L215,225 L220,240 L210,255 L195,250 Z',
-    'Chile': 'M215,320 L225,315 L228,350 L222,380 L215,375 L212,340 Z',
-    'Peru': 'M190,260 L210,255 L215,280 L205,300 L190,295 Z',
-    'New Zealand': 'M750,360 L758,355 L762,370 L755,380 L748,372 Z',
-    'Ireland': 'M420,110 L428,105 L430,115 L425,118 Z',
-    'Portugal': 'M420,140 L428,138 L430,150 L425,155 L420,148 Z',
-    'Singapore': 'M650,262 L655,260 L657,265 L653,267 L650,265 Z',
-    'UAE': 'M555,200 L565,198 L568,205 L562,208 L555,206 Z'
+  // Uses Natural Earth 110m TopoJSON from world-atlas (public domain)
+  // Source: https://github.com/topojson/world-atlas (Natural Earth data)
+  var geoWorldData = null; // cached TopoJSON
+
+  // ISO 3166-1 numeric → country name (GA4 uses country names)
+  var isoToName = {
+    '710': 'South Africa', '840': 'United States', '826': 'United Kingdom',
+    '356': 'India', '276': 'Germany', '076': 'Brazil', '124': 'Canada',
+    '036': 'Australia', '250': 'France', '528': 'Netherlands', '392': 'Japan',
+    '566': 'Nigeria', '404': 'Kenya', '156': 'China', '643': 'Russia',
+    '484': 'Mexico', '380': 'Italy', '724': 'Spain', '818': 'Egypt',
+    '360': 'Indonesia', '410': 'South Korea', '792': 'Turkey',
+    '032': 'Argentina', '682': 'Saudi Arabia', '764': 'Thailand',
+    '716': 'Zimbabwe', '508': 'Mozambique', '834': 'Tanzania',
+    '516': 'Namibia', '072': 'Botswana', '288': 'Ghana',
+    '894': 'Zambia', '800': 'Uganda', '231': 'Ethiopia',
+    '608': 'Philippines', '704': 'Vietnam', '458': 'Malaysia',
+    '586': 'Pakistan', '050': 'Bangladesh', '616': 'Poland',
+    '752': 'Sweden', '578': 'Norway', '170': 'Colombia',
+    '152': 'Chile', '604': 'Peru', '554': 'New Zealand',
+    '372': 'Ireland', '620': 'Portugal', '702': 'Singapore',
+    '784': 'UAE', '756': 'Switzerland', '040': 'Austria',
+    '056': 'Belgium', '203': 'Czechia', '208': 'Denmark',
+    '246': 'Finland', '300': 'Greece', '348': 'Hungary',
+    '376': 'Israel', '442': 'Luxembourg', '504': 'Morocco',
+    '862': 'Venezuela', '218': 'Ecuador', '858': 'Uruguay',
+    '012': 'Algeria', '788': 'Tunisia', '024': 'Angola',
+    '180': 'DR Congo', '148': 'Chad', '562': 'Niger',
+    '466': 'Mali', '736': 'Sudan', '854': 'Burkina Faso',
+    '678': 'São Tomé and Príncipe', '646': 'Rwanda',
+    '158': 'Taiwan', '344': 'Hong Kong', '764': 'Thailand',
+    '104': 'Myanmar', '418': 'Laos', '116': 'Cambodia',
+    '144': 'Sri Lanka', '524': 'Nepal', '496': 'Mongolia',
+    '398': 'Kazakhstan', '860': 'Uzbekistan'
   };
+
+  // Lightweight equirectangular projection for SVG
+  function projectGeo(lon, lat, w, h) {
+    var x = (lon + 180) * (w / 360);
+    var y = (90 - lat) * (h / 180);
+    return [x, y];
+  }
+
+  // Convert TopoJSON geometry to SVG path string
+  function topoToSvgPath(arcs, transform, geometry, w, h) {
+    var sx = transform.scale[0], sy = transform.scale[1];
+    var tx = transform.translate[0], ty = transform.translate[1];
+
+    function decodeArc(arcIdx) {
+      var rev = arcIdx < 0;
+      var arc = arcs[rev ? ~arcIdx : arcIdx];
+      var coords = [], x = 0, y = 0;
+      for (var i = 0; i < arc.length; i++) {
+        x += arc[i][0]; y += arc[i][1];
+        coords.push(projectGeo(x * sx + tx, y * sy + ty, w, h));
+      }
+      if (rev) coords.reverse();
+      return coords;
+    }
+
+    function ringToPath(ring) {
+      var pts = [];
+      for (var i = 0; i < ring.length; i++) {
+        var arcCoords = decodeArc(ring[i]);
+        // Skip first point of subsequent arcs (shared with previous)
+        pts = pts.concat(i === 0 ? arcCoords : arcCoords.slice(1));
+      }
+      return 'M' + pts.map(function(p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L') + 'Z';
+    }
+
+    var paths = [];
+    if (geometry.type === 'Polygon') {
+      geometry.arcs.forEach(function(ring) { paths.push(ringToPath(ring)); });
+    } else if (geometry.type === 'MultiPolygon') {
+      geometry.arcs.forEach(function(polygon) {
+        polygon.forEach(function(ring) { paths.push(ringToPath(ring)); });
+      });
+    }
+    return paths.join(' ');
+  }
+
+  async function loadWorldMap() {
+    if (geoWorldData) return geoWorldData;
+    try {
+      // Natural Earth 110m countries — public domain, hosted on jsDelivr
+      var resp = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+      geoWorldData = await resp.json();
+      return geoWorldData;
+    } catch (e) {
+      console.warn('Failed to load world map data:', e);
+      return null;
+    }
+  }
 
   function updateGeoMap(countries) {
     var svg = document.getElementById('geoMapSvg');
@@ -862,7 +901,6 @@
     var countLabel = document.getElementById('geoTotalCountries');
     if (!svg || !legend) return;
 
-    // Clear existing
     svg.innerHTML = '';
     legend.innerHTML = '';
 
@@ -874,7 +912,7 @@
 
     if (countLabel) countLabel.textContent = countries.length + ' countries';
 
-    // Build a map of country name → user count
+    // Build country name → user count map
     var countryMap = {};
     var maxUsers = 0;
     countries.forEach(function(c) {
@@ -882,59 +920,80 @@
       if (c.users > maxUsers) maxUsers = c.users;
     });
 
-    // Color scale: UWC blue with varying opacity
     function getCountryColor(users) {
       if (!users || users === 0) return '#e2e8f0';
       var intensity = Math.max(0.15, Math.min(1, users / maxUsers));
-      // Blend from light gold to UWC blue based on intensity
       if (intensity < 0.3) return 'rgba(189, 154, 79, 0.35)';
       if (intensity < 0.6) return 'rgba(0, 51, 102, 0.4)';
       return 'rgba(10, 26, 92, ' + (0.4 + intensity * 0.55) + ')';
     }
 
-    // Add tooltip element
+    // Tooltip setup
+    var container = document.getElementById('geoMapContainer');
+    var oldTooltip = document.getElementById('geoTooltip');
+    if (oldTooltip) oldTooltip.remove();
     var tooltip = document.createElement('div');
     tooltip.className = 'geo-tooltip';
     tooltip.id = 'geoTooltip';
-    var container = document.getElementById('geoMapContainer');
-    // Remove old tooltip if exists
-    var oldTooltip = document.getElementById('geoTooltip');
-    if (oldTooltip) oldTooltip.remove();
     container.style.position = 'relative';
     container.appendChild(tooltip);
 
-    // Draw all known country paths
-    Object.keys(geoCountryPaths).forEach(function(name) {
-      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', geoCountryPaths[name]);
-      path.setAttribute('class', 'geo-country' + (countryMap[name] ? ' active' : ''));
-      path.setAttribute('fill', getCountryColor(countryMap[name] || 0));
-      path.setAttribute('data-country', name);
-      path.setAttribute('data-users', countryMap[name] || 0);
+    // Load and render the real world map
+    loadWorldMap().then(function(topo) {
+      if (!topo) {
+        svg.innerHTML = '<text x="400" y="200" text-anchor="middle" fill="#a0aec0" font-size="14">Map data unavailable</text>';
+        return;
+      }
 
-      // Tooltip events
-      path.addEventListener('mouseenter', function(e) {
-        var users = parseInt(this.getAttribute('data-users'));
+      var w = 800, h = 400;
+      var obj = topo.objects.countries;
+      var geoms = obj.geometries;
+
+      geoms.forEach(function(geom) {
+        var id = geom.id; // ISO 3166-1 numeric
+        var name = (geom.properties && geom.properties.name) || isoToName[id] || '';
+        var users = countryMap[name] || 0;
+
+        var d = topoToSvgPath(topo.arcs, topo.transform, geom, w, h);
+        if (!d) return;
+
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('class', 'geo-country' + (users > 0 ? ' active' : ''));
+        path.setAttribute('fill', getCountryColor(users));
+        path.setAttribute('data-country', name);
+        path.setAttribute('data-users', users);
+
         if (users > 0) {
-          tooltip.innerHTML = '<span class="geo-tooltip-country">' + name + '</span><span class="geo-tooltip-value">' + formatNumber(users) + ' users</span>';
-          tooltip.style.display = 'block';
+          path.addEventListener('mouseenter', function() {
+            tooltip.innerHTML = '<span class="geo-tooltip-country">' + escapeHtml(name) + '</span><span class="geo-tooltip-value">' + formatNumber(users) + ' users</span>';
+            tooltip.style.display = 'block';
+          });
+          path.addEventListener('mousemove', function(e) {
+            var rect = container.getBoundingClientRect();
+            tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
+            tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
+          });
+          path.addEventListener('mouseleave', function() {
+            tooltip.style.display = 'none';
+          });
         }
-      });
-      path.addEventListener('mousemove', function(e) {
-        var rect = container.getBoundingClientRect();
-        tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
-        tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
-      });
-      path.addEventListener('mouseleave', function() {
-        tooltip.style.display = 'none';
+
+        svg.appendChild(path);
       });
 
-      svg.appendChild(path);
+      // Attribution
+      var attr = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      attr.setAttribute('x', '795'); attr.setAttribute('y', '395');
+      attr.setAttribute('text-anchor', 'end'); attr.setAttribute('fill', '#cbd5e1');
+      attr.setAttribute('font-size', '8'); attr.setAttribute('font-family', 'Inter,sans-serif');
+      attr.textContent = 'Natural Earth';
+      svg.appendChild(attr);
     });
 
     // Legend — top 5 countries
     var total = countries.reduce(function(sum, c) { return sum + c.users; }, 0);
-    countries.slice(0, 5).forEach(function(c, i) {
+    countries.slice(0, 5).forEach(function(c) {
       var pct = total > 0 ? ((c.users / total) * 100).toFixed(0) : 0;
       var color = getCountryColor(c.users);
       legend.innerHTML += '<span class="geo-legend-item">' +
