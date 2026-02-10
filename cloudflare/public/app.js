@@ -1297,57 +1297,77 @@
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
-      // Header height and footer height
+      // Layout constants
       const headerHeight = 30;
       const footerHeight = 12;
       const contentMargin = 2;
-      const sideMargin = 3; // 3mm each side for wider content
-
-      // Available height for content (page height minus header, footer, and margins)
+      const sideMargin = 3;
       const availableHeight = pageHeight - headerHeight - footerHeight - (contentMargin * 2);
       const contentWidth = pageWidth - (sideMargin * 2);
 
-      // Draw Header - white background
-      pdf.setFillColor(255, 255, 255);
-      pdf.rect(0, 0, pageWidth, headerHeight, 'F');
-
-      // Add header logo centered via API base64 fetch
-      var logoYEnd = 12;
+      // Fetch logo (non-blocking for speed)
+      var logoBase64 = null;
       try {
-        var logoBase64 = await callAPI('fetchLogoAsBase64');
-        if (logoBase64) {
-          var logoH = 10;
-          var tempImg = new Image();
-          tempImg.src = logoBase64;
-          await new Promise(function(r) { tempImg.onload = r; tempImg.onerror = r; });
-          var logoW = (tempImg.naturalWidth / tempImg.naturalHeight) * logoH;
-          pdf.addImage(logoBase64, 'PNG', (pageWidth - logoW) / 2, 5, logoW, logoH);
-          logoYEnd = 16;
-        }
+        logoBase64 = await callAPI('fetchLogoAsBase64');
       } catch(e) { console.warn('Logo embed failed:', e); }
 
-      pdf.setTextColor(0, 0, 0);
-      pdf.setFontSize(9);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('UWC Immersive Zone', pageWidth / 2, logoYEnd + 2, { align: 'center' });
+      // Helper: draw page header + footer
+      function drawPageChrome(pageNum, totalPages) {
+        // Header - white background
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, pageWidth, headerHeight, 'F');
 
-      pdf.setFontSize(7);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text('Analytics Dashboard - Interactive Loggerhead Turtle JigSpace Solution', pageWidth / 2, logoYEnd + 6, { align: 'center' });
+        var logoYEnd = 12;
+        if (logoBase64) {
+          try {
+            var logoH = 10;
+            var tempImg = new Image();
+            tempImg.src = logoBase64;
+            var logoW = (tempImg.naturalWidth / tempImg.naturalHeight) * logoH || logoH * 3;
+            pdf.addImage(logoBase64, 'PNG', (pageWidth - logoW) / 2, 5, logoW, logoH);
+            logoYEnd = 16;
+          } catch(e) { /* skip logo on this page */ }
+        }
 
-      pdf.setFontSize(6);
-      const dateStr = document.getElementById('dateRangeDisplay').textContent;
-      pdf.text('Report Period: ' + dateStr, pageWidth / 2, logoYEnd + 10, { align: 'center' });
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFontSize(9);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('UWC Immersive Zone', pageWidth / 2, logoYEnd + 2, { align: 'center' });
 
-      // Blue UWC line below header
-      pdf.setFillColor(10, 26, 92); // --uwc-blue #0a1a5c
-      var blueLineY = headerHeight - 1.5;
-      pdf.rect(0, blueLineY, pageWidth, 1.5, 'F');
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'normal');
+        var periodLabel = { DAU: 'Today', WEEKLY: 'Weekly', MONTHLY: 'Monthly', YEARLY: 'Yearly' }[currentPeriod] || currentPeriod;
+        pdf.text('Analytics Dashboard — ' + periodLabel + ' Report', pageWidth / 2, logoYEnd + 6, { align: 'center' });
+
+        pdf.setFontSize(6);
+        var dateStr = document.getElementById('dateRangeDisplay').textContent;
+        pdf.text('Report Period: ' + dateStr, pageWidth / 2, logoYEnd + 10, { align: 'center' });
+
+        // Blue line below header
+        pdf.setFillColor(10, 26, 92);
+        pdf.rect(0, headerHeight - 1.5, pageWidth, 1.5, 'F');
+
+        // Footer
+        pdf.setFillColor(0, 34, 68);
+        pdf.rect(0, pageHeight - footerHeight, pageWidth, footerHeight, 'F');
+
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(7);
+        pdf.text('University of the Western Cape | UWC Immersive Zone | 405 Voortrekker Road, Oostersee | infouih@uwc.ac.za',
+                 pageWidth / 2, pageHeight - footerHeight + 4.5, { align: 'center' });
+
+        if (totalPages > 1) {
+          pdf.setFontSize(5.5);
+          pdf.text('Page ' + pageNum + ' of ' + totalPages, pageWidth - sideMargin, pageHeight - footerHeight + 9, { align: 'right' });
+        }
+      }
+
+      // Hide tooltips and non-essential UI before capture
+      var tooltip = document.getElementById('geoTooltip');
+      if (tooltip) tooltip.style.display = 'none';
 
       // Capture dashboard content
       const content = document.getElementById('dashboardContent');
-
-      // Use higher scale for better quality
       const canvas = await html2canvas(content, {
         scale: 2,
         useCORS: true,
@@ -1355,37 +1375,49 @@
         backgroundColor: '#f5f7fa'
       });
 
-      // Calculate scaling to fit content on single page
-      const imgAspectRatio = canvas.width / canvas.height;
-      let imgWidth = contentWidth;
-      let imgHeight = imgWidth / imgAspectRatio;
+      // Restore tooltip
+      if (tooltip) tooltip.style.display = '';
 
-      // If height exceeds available space, scale down to fit
-      if (imgHeight > availableHeight) {
-        imgHeight = availableHeight;
-        imgWidth = imgHeight * imgAspectRatio;
+      // Calculate how the image maps to pages
+      const imgWidthPx = canvas.width;
+      const imgHeightPx = canvas.height;
+      const imgWidth = contentWidth; // use full content width
+      const imgHeight = imgWidth * (imgHeightPx / imgWidthPx);
+
+      // If content fits on one page, use single page layout
+      if (imgHeight <= availableHeight) {
+        drawPageChrome(1, 1);
+        var xOff = (pageWidth - imgWidth) / 2;
+        var imgData = canvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(imgData, 'JPEG', xOff, headerHeight + contentMargin, imgWidth, imgHeight);
+      } else {
+        // Multi-page: slice the captured image into page-sized chunks
+        var totalPages = Math.ceil(imgHeight / availableHeight);
+        var sliceHeightPx = Math.floor(imgHeightPx / totalPages);
+
+        for (var p = 0; p < totalPages; p++) {
+          if (p > 0) pdf.addPage();
+          drawPageChrome(p + 1, totalPages);
+
+          // Create a slice canvas for this page
+          var sliceY = p * sliceHeightPx;
+          var sliceH = Math.min(sliceHeightPx, imgHeightPx - sliceY);
+          var sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = imgWidthPx;
+          sliceCanvas.height = sliceH;
+          var sliceCtx = sliceCanvas.getContext('2d');
+          sliceCtx.drawImage(canvas, 0, sliceY, imgWidthPx, sliceH, 0, 0, imgWidthPx, sliceH);
+
+          var sliceImgData = sliceCanvas.toDataURL('image/jpeg', 0.92);
+          var sliceImgHeight = imgWidth * (sliceH / imgWidthPx);
+          var xOff = (pageWidth - imgWidth) / 2;
+          pdf.addImage(sliceImgData, 'JPEG', xOff, headerHeight + contentMargin, imgWidth, sliceImgHeight);
+        }
       }
-
-      // Center horizontally if width is less than available
-      const xOffset = (pageWidth - imgWidth) / 2;
-      const yOffset = headerHeight + contentMargin;
-
-      // Add the scaled image
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      pdf.addImage(imgData, 'JPEG', xOffset, yOffset, imgWidth, imgHeight);
-
-      // Draw Footer
-      pdf.setFillColor(0, 34, 68);
-      pdf.rect(0, pageHeight - footerHeight, pageWidth, footerHeight, 'F');
-
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(7);
-      pdf.text('University of the Western Cape | UWC Immersive Zone | 405 Voortrekker Road, Oostersee | infouih@uwc.ac.za',
-               pageWidth / 2, pageHeight - 5, { align: 'center' });
 
       // Save PDF
       const today = new Date().toISOString().split('T')[0];
-      pdf.save(`UWC_Analytics_${currentPeriod}_${today}.pdf`);
+      pdf.save('UWC_Analytics_' + currentPeriod + '_' + today + '.pdf');
 
     } catch (error) {
       console.error('PDF export error:', error);
@@ -1631,4 +1663,26 @@
         handleSignOut();
       });
     }
+  });
+
+  // ========================================
+  // Sticky Dashboard Hero — compact when stuck
+  // ========================================
+  document.addEventListener('DOMContentLoaded', function() {
+    var hero = document.querySelector('.dashboard-hero');
+    var navStrip = document.querySelector('.nav-strip');
+    if (!hero || !navStrip) return;
+
+    // Use IntersectionObserver on the nav-strip — when it scrolls out of view
+    // the hero is "stuck" to the header, so we compact it.
+    var observer = new IntersectionObserver(function(entries) {
+      // nav-strip not visible → hero is stuck
+      if (entries[0].isIntersecting) {
+        hero.classList.remove('stuck');
+      } else {
+        hero.classList.add('stuck');
+      }
+    }, { threshold: 0 });
+
+    observer.observe(navStrip);
   });

@@ -340,6 +340,50 @@
     padding: var(--space-xl) clamp(var(--space-xl), 10vw, 200px);
     margin-top: 0; /* nav strip is no longer fixed, flows naturally */
     overflow: hidden;
+    /* Sticky: sticks below the fixed header when scrolling */
+    position: sticky;
+    top: 148px; /* matches fixed header height (.nav-strip margin-top) */
+    z-index: 900;
+    transition: padding 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  /* Compact state when stuck — JS toggles this class */
+  .dashboard-hero.stuck {
+    padding-top: var(--space-sm);
+    padding-bottom: var(--space-sm);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+
+  .dashboard-hero.stuck .hero-text h1 {
+    font-size: 1.1rem;
+    margin-bottom: 4px;
+  }
+
+  .dashboard-hero.stuck .hero-text h1::before {
+    height: 3px;
+    width: 50px;
+  }
+
+  .dashboard-hero.stuck .project-subtitle {
+    font-size: 0.75rem;
+  }
+
+  .dashboard-hero.stuck .period-btn {
+    padding: 6px 14px;
+    font-size: 0.72rem;
+  }
+
+  .dashboard-hero.stuck .sync-date-label {
+    font-size: 0.95rem;
+  }
+
+  .dashboard-hero.stuck .sync-countdown {
+    font-size: 0.85rem;
+    min-width: 110px;
+  }
+
+  .dashboard-hero.stuck .last-updated {
+    font-size: 0.8rem;
   }
 
   .hero-content {
@@ -360,6 +404,7 @@
     margin-bottom: 24px;
     position: relative;
     padding-top: 2px;
+    transition: font-size 0.25s ease, margin-bottom 0.25s ease;
   }
 
   .hero-text h1::before {
@@ -380,6 +425,7 @@
     font-size: 0.9rem;
     color: var(--uwc-blue);
     font-weight: 500;
+    transition: font-size 0.25s ease;
   }
 
   .btn-view-project {
@@ -2263,6 +2309,11 @@
     .header-divider {
       display: none;
     }
+
+    /* Header is shorter when nav is hidden — update sticky top */
+    .dashboard-hero {
+      top: 90px;
+    }
   }
 
   @media (max-width: 768px) {
@@ -2340,6 +2391,11 @@
 
     .hero-text h1::before {
       width: 50px;
+    }
+
+    /* Smaller header at mobile — update sticky top */
+    .dashboard-hero {
+      top: 72px;
     }
     
     .footer-content {
