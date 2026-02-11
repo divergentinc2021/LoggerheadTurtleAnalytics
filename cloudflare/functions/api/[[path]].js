@@ -18,7 +18,9 @@ const ALLOWED_ORIGINS = [
 // Actions whose responses are identical for all authenticated users
 // and safe to serve from cache without per-request auth.
 const CACHEABLE_ACTIONS = new Set(['fetchAllDashboardData']);
-const CACHE_TTL_SECONDS = 60;
+// TTL slightly longer than the client's 60s sync interval so the cache
+// is still warm when the next refresh fires.  KV minimum TTL is 60s.
+const CACHE_TTL_SECONDS = 90;
 
 function getCorsOrigin(request, env) {
   var origin = request.headers.get('Origin') || '';
@@ -130,6 +132,10 @@ export async function onRequestPost(context) {
     var data = await response.text();
 
     // ── KV Cache: store successful response ──
+    // Await the put (not waitUntil) so the write completes before the
+    // response returns — guarantees the next request sees the cached value.
+    // KV put is fast (~10-50ms) so the added latency is negligible vs the
+    // 3-5s Apps Script round trip.
     if (cacheKey && kv && data) {
       try {
         var respObj = JSON.parse(data);
@@ -139,9 +145,7 @@ export async function onRequestPost(context) {
         if (respObj &&
             respObj.overview && respObj.overview.success === true &&
             respObj.overview.data) {
-          context.waitUntil(
-            kv.put(cacheKey, data, { expirationTtl: CACHE_TTL_SECONDS })
-          );
+          await kv.put(cacheKey, data, { expirationTtl: CACHE_TTL_SECONDS });
         }
       } catch (e) {
         // Non-JSON response or parse error — don't cache
