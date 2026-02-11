@@ -578,7 +578,7 @@
   }
 
   .sync-date-label {
-    font-size: 1.275rem;
+    font-size: clamp(0.8rem, 2.5vw, 1.275rem);
     color: var(--text-muted);
     white-space: nowrap;
   }
@@ -587,7 +587,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    min-width: 180px;
+    min-width: clamp(100px, 20vw, 180px);
   }
 
   .sync-bar-track {
@@ -611,11 +611,11 @@
   }
 
   .sync-countdown {
-    font-size: 1.05rem;
+    font-size: clamp(0.75rem, 2vw, 1.05rem);
     color: var(--text-muted);
     white-space: nowrap;
     font-weight: 500;
-    min-width: 130px;
+    min-width: 0;
   }
 
   .last-updated {
@@ -1277,6 +1277,8 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--space-lg);
+    flex-wrap: wrap;
+    gap: var(--space-sm);
   }
 
   .chart-header h3 {
@@ -1302,6 +1304,7 @@
   .chart-legend {
     display: flex;
     gap: var(--space-lg);
+    flex-wrap: wrap;
   }
 
   .legend-item {
@@ -3016,13 +3019,8 @@
       font-size: 0.55rem;
     }
 
-    .sync-date-label {
-      font-size: 0.85rem;
-    }
-
     .sync-countdown {
-      font-size: 0.75rem;
-      min-width: 90px;
+      font-size: 0.7rem;
     }
 
     .last-updated {
