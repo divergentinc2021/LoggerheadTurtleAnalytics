@@ -153,7 +153,9 @@
     initializeCharts();
     loadDashboardData(currentPeriod);
     fetchInitialDeploymentVersion();
-    startSyncTimer();
+    // Delay sync timer start — let the initial render queue drain first.
+    // The staggered render takes ~10 frames (~170ms), so 2s is safe.
+    setTimeout(startSyncTimer, 2000);
     // Display app version in footer
     callAPI('getAppVersion')
       .then(function(ver) {
@@ -480,27 +482,37 @@
   }
 
   // Pre-warm KV cache for all periods the user hasn't loaded yet.
-  // Fires one request per period with a 2s stagger so we don't slam
-  // Apps Script with 3 simultaneous requests.  The Worker proxy caches
-  // each response in KV, so subsequent period switches are instant edge reads.
+  // Fires one request per period SEQUENTIALLY (not in parallel) so
+  // we only have one Apps Script call in flight at a time.  Each
+  // response is ~50-100KB of JSON that the main thread must parse,
+  // so sequential avoids competing with the render pipeline.
+  // Starts 5s after first render to let the compositor settle.
   function preWarmOtherPeriods(loadedPeriod) {
     if (kvPreWarmed) return;
     kvPreWarmed = true;
     var remaining = ALL_PERIODS.filter(function(p) { return p !== loadedPeriod; });
-    remaining.forEach(function(period, idx) {
-      setTimeout(function() {
-        console.log('[PreWarm] Warming KV for period:', period);
-        // Fire-and-forget — we don't render this data, just let the Worker cache it
-        callAPI('fetchAllDashboardData', { period: period })
-          .then(function(data) {
-            cachedData[period] = data; // also cache client-side for instant switching
-            console.log('[PreWarm] Cached:', period);
-          })
-          .catch(function(e) {
-            console.warn('[PreWarm] Failed for', period, e);
-          });
-      }, (idx + 1) * 2000); // 2s, 4s, 6s stagger
-    });
+    var idx = 0;
+
+    function warmNext() {
+      if (idx >= remaining.length) return;
+      var period = remaining[idx++];
+      console.log('[PreWarm] Warming KV for period:', period);
+      callAPI('fetchAllDashboardData', { period: period })
+        .then(function(data) {
+          cachedData[period] = data;
+          console.log('[PreWarm] Cached:', period);
+        })
+        .catch(function(e) {
+          console.warn('[PreWarm] Failed for', period, e);
+        })
+        .finally(function() {
+          // Wait 3s then warm the next period
+          setTimeout(warmNext, 3000);
+        });
+    }
+
+    // Start 5s after first render to let compositor settle
+    setTimeout(warmNext, 5000);
   }
 
   // ── Staggered rendering ──
@@ -2263,10 +2275,14 @@
   // ========================================
   // When Chrome's compositor crashes (GPU process hiccup), <canvas> elements
   // lose their pixel data — they go blank.  Chart.js doesn't know this
-  // happened and won't repaint.  This watchdog checks every 10s whether
-  // chart canvases are blank despite having data, and forces a redraw.
+  // happened and won't repaint.
+  //
+  // CRITICAL: Recovery must be STAGGERED — recovering all 5 canvases in one
+  // batch is the exact same GPU storm that caused the crash.  Instead we
+  // recover ONE canvas per watchdog tick (every 3s), cycling through them.
   (function() {
-    var WATCHDOG_INTERVAL = 10000; // 10 seconds
+    var WATCHDOG_INTERVAL = 3000; // check one canvas every 3s
+    var _watchdogIndex = 0;      // round-robin pointer
 
     function isCanvasBlank(canvas) {
       if (!canvas || !canvas.width || !canvas.height) return true;
@@ -2285,60 +2301,66 @@
       }
     }
 
-    function recoverCharts() {
-      var recovered = false;
-      var noAnim = { duration: 0 };
+    function chartHasData(inst) {
+      return inst && inst.data && inst.data.datasets && inst.data.datasets[0] &&
+             inst.data.datasets[0].data && inst.data.datasets[0].data.length > 0 &&
+             !(inst.data.datasets[0].data.length === 1 && inst.data.datasets[0].data[0] === 0);
+    }
 
-      // Chart.js charts — if the instance has data but its canvas is blank, force update
-      var chartPairs = [
-        { chart: function() { return timeSeriesChart; }, id: 'timeSeriesChart' },
-        { chart: function() { return activityChart; }, id: 'activityChart' },
-        { chart: function() { return devicesChart; }, id: 'devicesChart' },
-        { chart: function() { return bounceSparkline; }, id: 'bounceSparkline' }
-      ];
-
-      for (var i = 0; i < chartPairs.length; i++) {
-        var inst = chartPairs[i].chart();
-        if (!inst) continue;
-        var canvas = inst.canvas;
-        if (!canvas) continue;
-        // Only recover if the chart has data (not in "No data" / empty state)
-        var hasData = inst.data && inst.data.datasets && inst.data.datasets[0] &&
-                      inst.data.datasets[0].data && inst.data.datasets[0].data.length > 0 &&
-                      !(inst.data.datasets[0].data.length === 1 && inst.data.datasets[0].data[0] === 0);
-        if (hasData && isCanvasBlank(canvas)) {
-          console.warn('[Watchdog] Recovering blank chart:', chartPairs[i].id);
-          inst.update(noAnim);
-          recovered = true;
+    // Each entry: { check, recover } — one per canvas type
+    var watchdogTargets = [
+      {
+        check: function() { return timeSeriesChart && chartHasData(timeSeriesChart) && isCanvasBlank(timeSeriesChart.canvas); },
+        recover: function() { console.warn('[Watchdog] Recovering timeSeriesChart'); timeSeriesChart.update({ duration: 0 }); }
+      },
+      {
+        check: function() { return activityChart && chartHasData(activityChart) && isCanvasBlank(activityChart.canvas); },
+        recover: function() { console.warn('[Watchdog] Recovering activityChart'); activityChart.update({ duration: 0 }); }
+      },
+      {
+        check: function() { return devicesChart && chartHasData(devicesChart) && isCanvasBlank(devicesChart.canvas); },
+        recover: function() { console.warn('[Watchdog] Recovering devicesChart'); devicesChart.update({ duration: 0 }); }
+      },
+      {
+        check: function() { return bounceSparkline && chartHasData(bounceSparkline) && isCanvasBlank(bounceSparkline.canvas); },
+        recover: function() { console.warn('[Watchdog] Recovering bounceSparkline'); bounceSparkline.update({ duration: 0 }); }
+      },
+      {
+        check: function() {
+          var gc = document.getElementById('geoMapCanvas');
+          return gc && geoCanvasReady && gc._countryMap && Object.keys(gc._countryMap).length > 0 && isCanvasBlank(gc);
+        },
+        recover: function() {
+          console.warn('[Watchdog] Recovering geo map');
+          var gc = document.getElementById('geoMapCanvas');
+          _drawGeoCanvasImmediate(gc, gc._countryMap, gc._maxUsers || 0);
         }
       }
+    ];
 
-      // Geo map canvas — if it was drawn before but is now blank, redraw
-      var geoCanvas = document.getElementById('geoMapCanvas');
-      if (geoCanvas && geoCanvasReady && geoCanvas._countryMap) {
-        var hasGeoData = Object.keys(geoCanvas._countryMap).length > 0;
-        if (hasGeoData && isCanvasBlank(geoCanvas)) {
-          console.warn('[Watchdog] Recovering blank geo map');
-          _drawGeoCanvasImmediate(geoCanvas, geoCanvas._countryMap, geoCanvas._maxUsers || 0);
-          recovered = true;
+    function watchdogTick() {
+      // Check ONE target per tick — round-robin through all 5
+      var target = watchdogTargets[_watchdogIndex];
+      _watchdogIndex = (_watchdogIndex + 1) % watchdogTargets.length;
+      try {
+        if (target.check()) {
+          target.recover();
         }
-      }
-
-      // If we recovered anything, clear fingerprints so the next sync
-      // also forces a full re-render (belt and suspenders)
-      if (recovered) {
-        dataFingerprints = {};
+      } catch (e) {
+        // Never let the watchdog itself crash
       }
     }
 
-    setInterval(recoverCharts, WATCHDOG_INTERVAL);
+    setInterval(watchdogTick, WATCHDOG_INTERVAL);
 
-    // Also recover when tab becomes visible again — compositor may have
-    // discarded canvas backing stores while the tab was hidden.
+    // On tab-visible: stagger recovery with 500ms gaps (not all at once)
     document.addEventListener('visibilitychange', function() {
       if (!document.hidden) {
-        // Small delay to let the compositor re-attach
-        setTimeout(recoverCharts, 500);
+        watchdogTargets.forEach(function(target, idx) {
+          setTimeout(function() {
+            try { if (target.check()) target.recover(); } catch (e) {}
+          }, (idx + 1) * 500);
+        });
       }
     });
   })();
