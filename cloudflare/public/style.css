@@ -348,43 +348,11 @@
        Animating padding + box-shadow on scroll caused layout thrashing. */
   }
 
-  /* Compact state when stuck — JS toggles this class */
+  /* Stuck state — only compositor-safe properties (no layout reflow).
+     Padding/font-size/margin changes caused full page reflows on every
+     scroll past the sticky threshold, crashing the compositor. */
   .dashboard-hero.stuck {
-    padding-top: var(--space-sm);
-    padding-bottom: var(--space-sm);
     box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-  }
-
-  .dashboard-hero.stuck .hero-text h1 {
-    font-size: 1.1rem;
-    margin-bottom: 4px;
-  }
-
-  .dashboard-hero.stuck .hero-text h1::before {
-    height: 3px;
-    width: 50px;
-  }
-
-  .dashboard-hero.stuck .project-subtitle {
-    font-size: 0.75rem;
-  }
-
-  .dashboard-hero.stuck .period-btn {
-    padding: 5px 11px;
-    font-size: 0.6rem;
-  }
-
-  .dashboard-hero.stuck .sync-date-label {
-    font-size: 0.95rem;
-  }
-
-  .dashboard-hero.stuck .sync-countdown {
-    font-size: 0.85rem;
-    min-width: 110px;
-  }
-
-  .dashboard-hero.stuck .last-updated {
-    font-size: 0.8rem;
   }
 
   .hero-content {
