@@ -504,6 +504,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+    position: relative;
   }
 
   .sync-date-label {
@@ -598,6 +599,10 @@
 
   .refresh-indicator {
     display: none;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
   }
 
   .refresh-indicator.loading {

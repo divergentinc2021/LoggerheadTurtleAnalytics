@@ -117,9 +117,12 @@ export async function onRequestPost(context) {
     if (cacheKey && kv && data) {
       try {
         var respObj = JSON.parse(data);
-        // Only cache responses that look like successful dashboard data
-        // (have an 'overview' key) — never cache auth errors.
-        if (respObj && respObj.overview) {
+        // Only cache if the response is a fully successful dashboard payload:
+        // must have overview.success === true AND actual data present.
+        // Never cache auth errors, partial failures, or empty responses.
+        if (respObj &&
+            respObj.overview && respObj.overview.success === true &&
+            respObj.overview.data) {
           context.waitUntil(
             kv.put(cacheKey, data, { expirationTtl: CACHE_TTL_SECONDS })
           );
