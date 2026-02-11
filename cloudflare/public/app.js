@@ -1678,6 +1678,9 @@
       }
 
       // ── SECTION: Trends ──
+      // Ensure the header + legend + chart all land on the same page
+      var trendsH = 14 + 5 + 65; // sectionHead + legend + chart
+      ensureSpace(Math.min(trendsH, usableBottom - headerH - gap - 4)); // don't ask for more than a full page
       sectionHead('Trends \u2014 Statistics');
       // Legend row
       var legendItems = [
@@ -1695,20 +1698,32 @@
         lx += 28;
       });
       cursorY += 4;
-      addChartImage(chartImgs.timeSeries, 65);
+      // Draw chart — use remaining space on this page (no forced page break)
+      if (chartImgs.timeSeries) {
+        var tsRemaining = usableBottom - cursorY - 3;
+        var tsH = Math.max(40, Math.min(65, tsRemaining));
+        try { pdf.addImage(chartImgs.timeSeries, 'PNG', side, cursorY, cw, tsH); } catch(e) {}
+        cursorY += tsH + 3;
+      } else {
+        pdf.setTextColor.apply(pdf, PDF_COLORS.textMuted); pdf.setFontSize(8);
+        pdf.text('Chart unavailable', side + cw / 2, cursorY + 10, { align: 'center' });
+        cursorY += 15;
+      }
 
       // ── SECTION: Audience ──
+      // Audience needs ~50mm total — ensure header + content stay together
+      var audienceH = 50;
+      ensureSpace(Math.min(audienceH, usableBottom - headerH - gap - 4));
       sectionHead('Audience');
       var leftW = cw * 0.55;
       var rightW = cw * 0.4;
       var audienceStartY = cursorY;
+      var audienceEndY = cursorY;
 
       // Left: Activity chart + bounce sparkline
       if (chartImgs.activity) {
-        ensureSpace(50);
-        try {
-          pdf.addImage(chartImgs.activity, 'PNG', side, cursorY, leftW, 28);
-        } catch(e) {}
+        try { pdf.addImage(chartImgs.activity, 'PNG', side, cursorY, leftW, 28); } catch(e) {}
+        audienceEndY = Math.max(audienceEndY, cursorY + 30);
         cursorY += 30;
       }
       if (chartImgs.bounce) {
@@ -1716,81 +1731,77 @@
         pdf.setTextColor.apply(pdf, PDF_COLORS.textMuted);
         pdf.text('Bounce Rate Trend', side, cursorY + 2);
         cursorY += 3;
-        try {
-          pdf.addImage(chartImgs.bounce, 'PNG', side, cursorY, leftW * 0.6, 10);
-        } catch(e) {}
+        try { pdf.addImage(chartImgs.bounce, 'PNG', side, cursorY, leftW * 0.6, 10); } catch(e) {}
+        audienceEndY = Math.max(audienceEndY, cursorY + 12);
         cursorY += 12;
       }
 
-      // Right: Devices chart
+      // Right: Devices chart — placed alongside left content on the SAME page
       if (chartImgs.devices) {
-        var devY = audienceStartY;
-        try {
-          pdf.addImage(chartImgs.devices, 'PNG', side + leftW + 4, devY, rightW, 40);
-        } catch(e) {}
-        if (audienceStartY + 42 > cursorY) cursorY = audienceStartY + 42;
+        try { pdf.addImage(chartImgs.devices, 'PNG', side + leftW + 4, audienceStartY, rightW, 40); } catch(e) {}
+        audienceEndY = Math.max(audienceEndY, audienceStartY + 42);
       }
-      cursorY += 3;
+      cursorY = audienceEndY + 3;
 
       // ── SECTION: Detailed Data ──
       sectionHead('Detailed Data');
 
-      // Top Pages table
-      if (data.topPages && data.topPages.success && data.topPages.data.length > 0) {
+      // Helper: draw a table with its sub-title (keeps title + first rows together)
+      function drawNamedTable(title, headers, rows, colWidths) {
+        if (!rows || rows.length === 0) return;
+        // Ensure at least the title + header + 2 data rows fit before starting
+        ensureSpace(5 + 6 + 5.5 * 2);
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
         pdf.setTextColor.apply(pdf, PDF_COLORS.textPrimary);
-        pdf.text('Top Pages', side, cursorY + 3); cursorY += 5;
+        pdf.text(title, side, cursorY + 3); cursorY += 5;
+        drawTable(headers, rows, colWidths);
+      }
+
+      // Top Pages table
+      if (data.topPages && data.topPages.success && data.topPages.data.length > 0) {
         var pgRows = data.topPages.data.slice(0, 8).map(function(p) {
           return [p.title || '', formatNumber(p.views), formatDuration(p.avgDuration)];
         });
-        drawTable(['Page Title', 'Views', 'Avg. Time'], pgRows, [120, 30, 30]);
+        drawNamedTable('Top Pages', ['Page Title', 'Views', 'Avg. Time'], pgRows, [120, 30, 30]);
       }
 
       // Countries table
       if (data.countries && data.countries.success && data.countries.data.length > 0) {
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
-        pdf.setTextColor.apply(pdf, PDF_COLORS.textPrimary);
-        pdf.text('Countries', side, cursorY + 3); cursorY += 5;
         var cTotal = data.countries.data.reduce(function(s, c) { return s + c.users; }, 0);
         var cRows = data.countries.data.slice(0, 8).map(function(c) {
           return [c.country, formatNumber(c.users), (cTotal > 0 ? ((c.users / cTotal) * 100).toFixed(1) : '0') + '%'];
         });
-        drawTable(['Country', 'Users', 'Share'], cRows, [80, 40, 40]);
+        drawNamedTable('Countries', ['Country', 'Users', 'Share'], cRows, [80, 40, 40]);
       }
 
       // Events table
       if (data.events && data.events.success && data.events.data.length > 0) {
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
-        pdf.setTextColor.apply(pdf, PDF_COLORS.textPrimary);
-        pdf.text('GA4 Events', side, cursorY + 3); cursorY += 5;
         var eRows = data.events.data.slice(0, 15).map(function(ev) {
           var name = ev.name + (customEvents.indexOf(ev.name) !== -1 ? ' [TRACKED]' : '');
           return [name, formatNumber(ev.count), formatNumber(ev.users)];
         });
-        drawTable(['Event Name', 'Count', 'Users'], eRows, [100, 40, 40]);
+        drawNamedTable('GA4 Events', ['Event Name', 'Count', 'Users'], eRows, [100, 40, 40]);
       }
 
       // Traffic Sources table
       if (data.trafficSources && data.trafficSources.success) {
         var ts = data.trafficSources.data;
         if (ts && ts.labels && ts.labels.length > 0) {
-          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
-          pdf.setTextColor.apply(pdf, PDF_COLORS.textPrimary);
-          pdf.text('Traffic Sources', side, cursorY + 3); cursorY += 5;
           var tsTotal = ts.values.reduce(function(s, v) { return s + v; }, 0);
           var tsRows = ts.labels.map(function(label, i) {
             var val = ts.values[i];
             return [label, formatNumber(val), (tsTotal > 0 ? ((val / tsTotal) * 100).toFixed(1) : '0') + '%'];
           });
-          drawTable(['Channel', 'Sessions', 'Share'], tsRows, [80, 40, 40]);
+          drawNamedTable('Traffic Sources', ['Channel', 'Sessions', 'Share'], tsRows, [80, 40, 40]);
         }
       }
 
       // ── SECTION: Visitor Geography ──
       if (chartImgs.geoMap) {
-        sectionHead('Visitor Geography');
         var mapH = Math.min(55, cw / 2.2);
-        ensureSpace(mapH + 15);
+        // Ensure header + map + legend all land on the same page
+        ensureSpace(Math.min(14 + mapH + 10, usableBottom - headerH - gap - 4));
+        sectionHead('Visitor Geography');
         try {
           pdf.addImage(chartImgs.geoMap, 'PNG', side, cursorY, cw, mapH);
           cursorY += mapH + 3;
