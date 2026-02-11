@@ -430,6 +430,16 @@
   }
 
   function handleDashboardData(data) {
+    // On refresh (not first load), skip per-element transitions to avoid
+    // 50+ simultaneous opacity animations that overwhelm the browser.
+    // Instead, do one subtle whole-dashboard fade.
+    window._refreshUpdate = !isFirstLoad;
+
+    if (window._refreshUpdate) {
+      var dc = document.getElementById('dashboardContent');
+      if (dc) { dc.style.opacity = '0.97'; }
+    }
+
     showLoading(false);
     hidePreloader();
     resetSyncCountdown();
@@ -502,6 +512,15 @@
 
     // Update "Last Updated" timestamp
     updateLastUpdated();
+
+    // Fade dashboard back to full opacity after all instant updates
+    if (window._refreshUpdate) {
+      requestAnimationFrame(function() {
+        var dc = document.getElementById('dashboardContent');
+        if (dc) { dc.style.opacity = '1'; }
+      });
+    }
+    window._refreshUpdate = false;
   }
 
   function handleError(error) {
@@ -566,7 +585,15 @@
     var el = document.getElementById(id);
     if (!el) return;
     if (el.textContent === newText) return; // no change
-    // Cancel any pending transition timer
+    // On refresh: write instantly (no per-element transition)
+    if (window._refreshUpdate) {
+      if (el._smoothTimer) { clearTimeout(el._smoothTimer); el._smoothTimer = null; }
+      el.style.transition = 'none';
+      el.style.opacity = '1';
+      el.textContent = newText;
+      return;
+    }
+    // First load: use smooth transition
     if (el._smoothTimer) clearTimeout(el._smoothTimer);
     el.style.transition = 'opacity 0.2s ease';
     el.style.opacity = '0.3';
@@ -665,39 +692,42 @@
   }
 
   function updateTimeSeriesChart(data) {
+    var noAnim = window._refreshUpdate ? { duration: 0 } : undefined;
     if (!data.labels || data.labels.length === 0) {
       timeSeriesChart.data.labels = ['No data'];
       timeSeriesChart.data.datasets[0].data = [0];
       timeSeriesChart.data.datasets[1].data = [0];
       timeSeriesChart.data.datasets[2].data = [0];
-      timeSeriesChart.update();
+      timeSeriesChart.update(noAnim);
       return;
     }
     timeSeriesChart.data.labels = data.labels;
     timeSeriesChart.data.datasets[0].data = data.users;
     timeSeriesChart.data.datasets[1].data = data.sessions;
     timeSeriesChart.data.datasets[2].data = data.pageViews;
-    timeSeriesChart.update();
+    timeSeriesChart.update(noAnim);
   }
 
   function updateActivityChart(data) {
+    var noAnim = window._refreshUpdate ? { duration: 0 } : undefined;
     if (!data.labels || data.labels.length === 0) {
       activityChart.data.labels = ['No data'];
       activityChart.data.datasets[0].data = [0];
-      activityChart.update();
+      activityChart.update(noAnim);
       return;
     }
     activityChart.data.labels = data.labels;
     activityChart.data.datasets[0].data = data.users;
-    activityChart.update();
+    activityChart.update(noAnim);
   }
 
   function updateDevicesChart(data) {
+    var noAnim = window._refreshUpdate ? { duration: 0 } : undefined;
     if (!data.labels || data.labels.length === 0) {
       devicesChart.data.labels = ['No data'];
       devicesChart.data.datasets[0].data = [0];
       devicesChart.data.datasets[0].backgroundColor = ['#e2e8f0'];
-      devicesChart.update();
+      devicesChart.update(noAnim);
       return;
     }
     devicesChart.data.labels = data.labels;
@@ -706,7 +736,7 @@
     const deviceColors = data.labels.map((label, i) => chartColors[i % chartColors.length]);
     devicesChart.data.datasets[0].backgroundColor = deviceColors;
 
-    devicesChart.update();
+    devicesChart.update(noAnim);
   }
 
   // Graceful table update — fades old content out, swaps HTML, fades in
@@ -714,7 +744,15 @@
     if (!el) return;
     // If content hasn't changed, skip the update entirely
     if (el.innerHTML.trim() === newHTML.trim()) return;
-    // Cancel any pending transition timer
+    // On refresh: write instantly (no per-element fade)
+    if (window._refreshUpdate) {
+      if (el._fadeTimer) { clearTimeout(el._fadeTimer); el._fadeTimer = null; }
+      el.style.transition = 'none';
+      el.style.opacity = '1';
+      el.innerHTML = newHTML;
+      return;
+    }
+    // First load: use fade transition
     if (el._fadeTimer) clearTimeout(el._fadeTimer);
     el.style.transition = 'opacity 0.25s ease';
     el.style.opacity = '0.3';
@@ -857,15 +895,16 @@
   // ========================================
   function updateBounceSparkline(data) {
     if (!bounceSparkline) return;
+    var noAnim = window._refreshUpdate ? { duration: 0 } : undefined;
     if (!data || !data.labels || data.labels.length === 0) {
       bounceSparkline.data.labels = ['No data'];
       bounceSparkline.data.datasets[0].data = [0];
-      bounceSparkline.update();
+      bounceSparkline.update(noAnim);
       return;
     }
     bounceSparkline.data.labels = data.labels;
     bounceSparkline.data.datasets[0].data = data.bounceRates;
-    bounceSparkline.update();
+    bounceSparkline.update(noAnim);
   }
 
   // ========================================
@@ -1282,7 +1321,31 @@
   });
 
   // ========================================
-  // PDF Export - Force fit to single page
+  // PDF Export Helpers — canvas → img swap
+  // ========================================
+  // html2canvas cannot render <canvas> elements — they appear blank.
+  // We swap each canvas with a static <img> before capture, then restore.
+  function swapCanvasToImg(canvas, dataURL) {
+    if (!canvas || !canvas.parentNode) return null;
+    var img = document.createElement('img');
+    img.src = dataURL;
+    img.width = canvas.width;
+    img.height = canvas.height;
+    img.className = canvas.className;
+    img.style.cssText = window.getComputedStyle(canvas).cssText;
+    img.style.width = canvas.offsetWidth + 'px';
+    img.style.height = canvas.offsetHeight + 'px';
+    canvas.parentNode.replaceChild(img, canvas);
+    return { original: canvas, replacement: img };
+  }
+
+  function restoreCanvasFromImg(swap) {
+    if (!swap || !swap.replacement.parentNode) return;
+    swap.replacement.parentNode.replaceChild(swap.original, swap.replacement);
+  }
+
+  // ========================================
+  // PDF Export
   // ========================================
   async function exportToPDF() {
     const btn = document.getElementById('exportPdfBtn');
@@ -1362,9 +1425,36 @@
         }
       }
 
-      // Hide tooltips and non-essential UI before capture
+      // Hide tooltips before capture
       var tooltip = document.getElementById('geoTooltip');
       if (tooltip) tooltip.style.display = 'none';
+
+      // Swap all <canvas> elements with <img> snapshots
+      // html2canvas cannot render canvas content — they appear blank
+      var canvasSwaps = [];
+      try {
+        if (timeSeriesChart && timeSeriesChart.canvas) {
+          var s = swapCanvasToImg(timeSeriesChart.canvas, timeSeriesChart.toBase64Image());
+          if (s) canvasSwaps.push(s);
+        }
+        if (activityChart && activityChart.canvas) {
+          var s = swapCanvasToImg(activityChart.canvas, activityChart.toBase64Image());
+          if (s) canvasSwaps.push(s);
+        }
+        if (devicesChart && devicesChart.canvas) {
+          var s = swapCanvasToImg(devicesChart.canvas, devicesChart.toBase64Image());
+          if (s) canvasSwaps.push(s);
+        }
+        if (bounceSparkline && bounceSparkline.canvas) {
+          var s = swapCanvasToImg(bounceSparkline.canvas, bounceSparkline.toBase64Image());
+          if (s) canvasSwaps.push(s);
+        }
+        var geoCanvas = document.getElementById('geoMapCanvas');
+        if (geoCanvas) {
+          var s = swapCanvasToImg(geoCanvas, geoCanvas.toDataURL('image/png'));
+          if (s) canvasSwaps.push(s);
+        }
+      } catch(e) { console.warn('Canvas swap warning:', e); }
 
       // Capture dashboard content
       const content = document.getElementById('dashboardContent');
@@ -1375,8 +1465,9 @@
         backgroundColor: '#f5f7fa'
       });
 
-      // Restore tooltip
+      // Restore all canvases and tooltip
       if (tooltip) tooltip.style.display = '';
+      canvasSwaps.forEach(function(sw) { restoreCanvasFromImg(sw); });
 
       // Calculate how the image maps to pages
       const imgWidthPx = canvas.width;
