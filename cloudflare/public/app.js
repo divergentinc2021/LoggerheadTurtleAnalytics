@@ -28,11 +28,21 @@
   // Apps Script login URL — update this to your deployed Apps Script URL
   const LOGIN_URL = 'https://script.google.com/macros/s/AKfycbzGU2I7Cyklhmry6FicL51YK0jAiIgCnleTb7A4qhgJm-IdNlN5Nf81Al_jSd803AUn/exec';
 
-  // Chart instances
+  // Chart instances — created lazily when their section scrolls into view
   let timeSeriesChart = null;
   let activityChart = null;
   let devicesChart = null;
   let bounceSparkline = null;
+
+  // Lazy init tracking — which chart sections have been created
+  // Maps section CSS selector → boolean
+  var lazyChartsReady = {
+    timeSeries: false,   // charts-section-single (timeSeriesChart)
+    activity: false,     // charts-section-activity-devices (activityChart, devicesChart, bounceSparkline)
+    geo: false           // tables-section with geoMapCanvas
+  };
+  // Pending data for lazy charts — stored when data arrives before chart exists
+  var pendingChartData = {};
 
   // Current period
   let currentPeriod = 'WEEKLY';
@@ -223,26 +233,35 @@
     canvas.style.height = parent.clientHeight + 'px';
   }
 
+  // ── Lazy Chart Initialization ──
+  // Charts are NOT created at page load.  Instead, initializeCharts() is a
+  // no-op that stores nothing.  The zone-freeze IntersectionObserver calls
+  // lazyInitSection() when a section first enters the viewport.  Only then
+  // do we create Chart.js instances — saving GPU memory for off-screen
+  // sections and preventing compositor crashes from 5 simultaneous canvases.
+
   function initializeCharts() {
-    // Size canvases to their containers BEFORE Chart.js init
-    ['timeSeriesChart', 'activityChart', 'devicesChart', 'bounceSparkline'].forEach(function(id) {
-      var c = document.getElementById(id);
-      if (c) sizeCanvasToParent(c);
-    });
+    // No-op — charts are created lazily by lazyInitSection()
+    // This function is kept for compatibility with the init flow.
+  }
 
-    // Time Series Chart - Smooth curved lines like reference
-    const timeSeriesCtx = document.getElementById('timeSeriesChart').getContext('2d');
+  // Create the time-series chart (Statistics section)
+  function lazyInitTimeSeries() {
+    if (lazyChartsReady.timeSeries) return;
+    var c = document.getElementById('timeSeriesChart');
+    if (!c) return;
+    sizeCanvasToParent(c);
 
-    // Create gradient fills
-    const gradient1 = timeSeriesCtx.createLinearGradient(0, 0, 0, 250);
+    var ctx = c.getContext('2d');
+    var gradient1 = ctx.createLinearGradient(0, 0, 0, 250);
     gradient1.addColorStop(0, 'rgba(0, 51, 102, 0.2)');
     gradient1.addColorStop(1, 'rgba(0, 51, 102, 0)');
 
-    const gradient2 = timeSeriesCtx.createLinearGradient(0, 0, 0, 250);
+    var gradient2 = ctx.createLinearGradient(0, 0, 0, 250);
     gradient2.addColorStop(0, 'rgba(0, 201, 167, 0.15)');
     gradient2.addColorStop(1, 'rgba(0, 201, 167, 0)');
 
-    timeSeriesChart = new Chart(timeSeriesCtx, {
+    timeSeriesChart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: [],
@@ -334,91 +353,115 @@
       }
     });
 
-    // Activity Mini Chart
-    const activityCtx = document.getElementById('activityChart').getContext('2d');
-    const activityGradient = activityCtx.createLinearGradient(0, 0, 0, 120);
-    activityGradient.addColorStop(0, 'rgba(0, 201, 167, 0.3)');
-    activityGradient.addColorStop(1, 'rgba(0, 201, 167, 0)');
+    lazyChartsReady.timeSeries = true;
+    console.log('[Lazy] Time series chart initialized');
 
-    activityChart = new Chart(activityCtx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          data: [],
-          borderColor: colors.teal,
-          backgroundColor: activityGradient,
-          fill: true,
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 0
-        }]
-      },
-      options: {
-        responsive: false,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { enabled: false }
+    // Flush any pending data
+    if (pendingChartData.timeSeries) {
+      updateTimeSeriesChart(pendingChartData.timeSeries);
+      delete pendingChartData.timeSeries;
+    }
+  }
+
+  // Create activity chart, devices chart, and bounce sparkline
+  function lazyInitActivityDevices() {
+    if (lazyChartsReady.activity) return;
+
+    // Activity Mini Chart
+    var actC = document.getElementById('activityChart');
+    var devC = document.getElementById('devicesChart');
+    var bncC = document.getElementById('bounceSparkline');
+
+    if (actC) {
+      sizeCanvasToParent(actC);
+      var activityCtx = actC.getContext('2d');
+      var activityGradient = activityCtx.createLinearGradient(0, 0, 0, 120);
+      activityGradient.addColorStop(0, 'rgba(0, 201, 167, 0.3)');
+      activityGradient.addColorStop(1, 'rgba(0, 201, 167, 0)');
+
+      activityChart = new Chart(activityCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            data: [],
+            borderColor: colors.teal,
+            backgroundColor: activityGradient,
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 0
+          }]
         },
-        scales: {
-          x: { display: false },
-          y: { display: false }
+        options: {
+          responsive: false,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: false }
+          },
+          scales: {
+            x: { display: false },
+            y: { display: false }
+          }
         }
-      }
-    });
+      });
+    }
 
     // Devices Bar Chart
-    const devicesCtx = document.getElementById('devicesChart').getContext('2d');
-    devicesChart = new Chart(devicesCtx, {
-      type: 'bar',
-      data: {
-        labels: ['Desktop', 'Mobile', 'Tablet'],
-        datasets: [{
-          data: [0, 0, 0],
-          backgroundColor: [colors.primary, colors.teal, colors.purple],
-          borderRadius: 8,
-          barThickness: 40
-        }]
-      },
-      options: {
-        responsive: false,
-        maintainAspectRatio: false,
-        animation: false,
-        indexAxis: 'y',
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: 'rgba(255,255,255,0.95)',
-            titleColor: '#1a202c',
-            bodyColor: '#4a5568',
-            borderColor: '#e2e8f0',
-            borderWidth: 1,
-            padding: 10,
-            cornerRadius: 8
-          }
+    if (devC) {
+      sizeCanvasToParent(devC);
+      var devicesCtx = devC.getContext('2d');
+      devicesChart = new Chart(devicesCtx, {
+        type: 'bar',
+        data: {
+          labels: ['Desktop', 'Mobile', 'Tablet'],
+          datasets: [{
+            data: [0, 0, 0],
+            backgroundColor: [colors.primary, colors.teal, colors.purple],
+            borderRadius: 8,
+            barThickness: 40
+          }]
         },
-        scales: {
-          x: {
-            grid: {
-              color: 'rgba(0,0,0,0.04)',
-              drawBorder: false
-            },
-            ticks: { font: { size: 10 } }
+        options: {
+          responsive: false,
+          maintainAspectRatio: false,
+          animation: false,
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(255,255,255,0.95)',
+              titleColor: '#1a202c',
+              bodyColor: '#4a5568',
+              borderColor: '#e2e8f0',
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 8
+            }
           },
-          y: {
-            grid: { display: false },
-            ticks: { font: { size: 11 } }
+          scales: {
+            x: {
+              grid: {
+                color: 'rgba(0,0,0,0.04)',
+                drawBorder: false
+              },
+              ticks: { font: { size: 10 } }
+            },
+            y: {
+              grid: { display: false },
+              ticks: { font: { size: 11 } }
+            }
           }
         }
-      }
-    });
+      });
+    }
 
     // Bounce Rate Sparkline
-    var bounceCtx = document.getElementById('bounceSparkline');
-    if (bounceCtx) {
-      bounceSparkline = new Chart(bounceCtx.getContext('2d'), {
+    if (bncC) {
+      sizeCanvasToParent(bncC);
+      bounceSparkline = new Chart(bncC.getContext('2d'), {
         type: 'line',
         data: {
           labels: [],
@@ -440,6 +483,48 @@
           scales: { x: { display: false }, y: { display: false } }
         }
       });
+    }
+
+    lazyChartsReady.activity = true;
+    console.log('[Lazy] Activity/Devices/Bounce charts initialized');
+
+    // Flush pending data
+    if (pendingChartData.activityTimeSeries) {
+      updateActivityChart(pendingChartData.activityTimeSeries);
+      delete pendingChartData.activityTimeSeries;
+    }
+    if (pendingChartData.devices) {
+      updateDevicesChart(pendingChartData.devices);
+      delete pendingChartData.devices;
+    }
+    if (pendingChartData.bounce) {
+      updateBounceSparkline(pendingChartData.bounce);
+      delete pendingChartData.bounce;
+    }
+  }
+
+  // Determine which lazy-init function to call for a given section element
+  function lazyInitSection(sectionEl) {
+    if (!sectionEl) return;
+    var cl = sectionEl.classList;
+
+    if (cl.contains('charts-section-single') && !lazyChartsReady.timeSeries) {
+      lazyInitTimeSeries();
+    }
+    if (cl.contains('charts-section-activity-devices') && !lazyChartsReady.activity) {
+      lazyInitActivityDevices();
+    }
+    // Geo map section is inside a .tables-section that contains .chart-geo-map
+    if (cl.contains('tables-section') && !lazyChartsReady.geo) {
+      if (sectionEl.querySelector('.chart-geo-map')) {
+        lazyChartsReady.geo = true;
+        console.log('[Lazy] Geo map section entered viewport');
+        // Geo map initializes on first data call — just flush pending data
+        if (pendingChartData.geoCountries) {
+          updateGeoMap(pendingChartData.geoCountries);
+          delete pendingChartData.geoCountries;
+        }
+      }
     }
   }
 
@@ -828,6 +913,11 @@
   }
 
   function updateTimeSeriesChart(data) {
+    // If chart isn't initialized yet (section off-screen), store data for later
+    if (!timeSeriesChart) {
+      pendingChartData.timeSeries = data;
+      return;
+    }
     if (!data.labels || data.labels.length === 0) {
       timeSeriesChart.data.labels = ['No data'];
       timeSeriesChart.data.datasets[0].data = [0];
@@ -844,6 +934,10 @@
   }
 
   function updateActivityChart(data) {
+    if (!activityChart) {
+      pendingChartData.activityTimeSeries = data;
+      return;
+    }
     if (!data.labels || data.labels.length === 0) {
       activityChart.data.labels = ['No data'];
       activityChart.data.datasets[0].data = [0];
@@ -856,6 +950,10 @@
   }
 
   function updateDevicesChart(data) {
+    if (!devicesChart) {
+      pendingChartData.devices = data;
+      return;
+    }
     if (!data.labels || data.labels.length === 0) {
       devicesChart.data.labels = ['No data'];
       devicesChart.data.datasets[0].data = [0];
@@ -1011,7 +1109,10 @@
   // Bounce Rate Sparkline
   // ========================================
   function updateBounceSparkline(data) {
-    if (!bounceSparkline) return;
+    if (!bounceSparkline) {
+      pendingChartData.bounce = data;
+      return;
+    }
     if (!data || !data.labels || data.labels.length === 0) {
       bounceSparkline.data.labels = ['No data'];
       bounceSparkline.data.datasets[0].data = [0];
@@ -1093,6 +1194,19 @@
     var legend = document.getElementById('geoLegend');
     var countLabel = document.getElementById('geoTotalCountries');
     if (!canvas || !legend) return;
+
+    // If geo section hasn't entered viewport yet, store data for later
+    if (!lazyChartsReady.geo) {
+      pendingChartData.geoCountries = countries;
+      // Still update the text-only parts (count label + legend) — no GPU work
+      if (countLabel) countLabel.textContent = (countries ? countries.length : 0) + ' countries';
+      if (countries && countries.length > 0) {
+        var maxU = 0;
+        countries.forEach(function(c) { if (c.users > maxU) maxU = c.users; });
+        updateGeoLegend(legend, countries, maxU);
+      }
+      return;
+    }
 
     if (!countries || countries.length === 0) {
       if (countLabel) countLabel.textContent = '0 countries';
@@ -1410,6 +1524,39 @@
   }
 
   // ========================================
+  // Mobile Hamburger Nav Toggle
+  // ========================================
+  function toggleMobileNav() {
+    var nav = document.querySelector('.header-nav');
+    var btn = document.getElementById('hamburgerBtn');
+    var backdrop = document.getElementById('mobileNavBackdrop');
+    if (!nav || !btn) return;
+
+    var isOpen = nav.classList.contains('mobile-open');
+    if (isOpen) {
+      nav.classList.remove('mobile-open');
+      btn.classList.remove('open');
+      if (backdrop) backdrop.classList.remove('visible');
+    } else {
+      nav.classList.add('mobile-open');
+      btn.classList.add('open');
+      if (backdrop) backdrop.classList.add('visible');
+    }
+  }
+
+  // Close mobile nav on window resize past breakpoint
+  window.addEventListener('resize', function() {
+    if (window.innerWidth > 900) {
+      var nav = document.querySelector('.header-nav');
+      var btn = document.getElementById('hamburgerBtn');
+      var backdrop = document.getElementById('mobileNavBackdrop');
+      if (nav) nav.classList.remove('mobile-open');
+      if (btn) btn.classList.remove('open');
+      if (backdrop) backdrop.classList.remove('visible');
+    }
+  });
+
+  // ========================================
   // Side Tab Toggle with Auto-Hide
   // ========================================
   var sideTabTimer = null;
@@ -1521,6 +1668,19 @@
       // Fetch logo
       var logoBase64 = null;
       try { logoBase64 = await callAPI('fetchLogoAsBase64'); } catch(e) {}
+
+      // Force-init any lazy charts that haven't been scrolled to yet,
+      // so the PDF captures all chart images.
+      if (!lazyChartsReady.timeSeries) lazyInitTimeSeries();
+      if (!lazyChartsReady.activity) lazyInitActivityDevices();
+      // Geo map: trigger init + data flush if pending
+      if (!lazyChartsReady.geo) {
+        lazyChartsReady.geo = true;
+        if (pendingChartData.geoCountries) {
+          updateGeoMap(pendingChartData.geoCountries);
+          delete pendingChartData.geoCountries;
+        }
+      }
 
       // Snapshot chart images (instant, non-destructive reads)
       var chartImgs = {};
@@ -2272,6 +2432,8 @@
       for (var i = 0; i < entries.length; i++) {
         if (entries[i].isIntersecting) {
           entries[i].target.classList.add('zone-active');
+          // Lazy-init charts when their section first enters viewport
+          lazyInitSection(entries[i].target);
         } else {
           entries[i].target.classList.remove('zone-active');
         }
@@ -2298,10 +2460,12 @@
   // As a fallback for browsers that don't fire these events, a lightweight
   // visibility-change handler re-renders when the tab becomes visible.
   (function() {
-    // Bind context-loss handlers on all chart canvases
+    // Bind context-loss handlers on all chart canvases.
+    // Called once per canvas — safe to call multiple times (idempotent via _ctxBound flag).
     function bindContextRecovery(canvasId, recoverFn) {
       var canvas = document.getElementById(canvasId);
-      if (!canvas) return;
+      if (!canvas || canvas._ctxBound) return;
+      canvas._ctxBound = true;
 
       canvas.addEventListener('contextlost', function(e) {
         console.warn('[ContextLost]', canvasId);
@@ -2314,7 +2478,9 @@
       });
     }
 
-    // Defer binding until charts are initialized (DOMContentLoaded + small delay)
+    // Bind recovery on ALL canvases (even if chart isn't created yet —
+    // contextlost fires on the <canvas> element itself).
+    // For lazy charts: recoverFn checks if the Chart.js instance exists.
     setTimeout(function() {
       bindContextRecovery('timeSeriesChart', function() {
         if (timeSeriesChart) timeSeriesChart.update('none');
@@ -2337,7 +2503,7 @@
     }, 3000);
 
     // Fallback: on tab-visible, stagger one redraw per canvas with gaps.
-    // No getImageData — just force a redraw if we have data.
+    // Only redraws charts that have been lazily initialized.
     document.addEventListener('visibilitychange', function() {
       if (document.hidden) return;
       var recoveries = [

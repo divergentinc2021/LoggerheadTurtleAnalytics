@@ -256,6 +256,110 @@
   }
 
   /* ========================================
+     Hamburger Menu Button (hidden on desktop)
+     ======================================== */
+  .hamburger-btn {
+    display: none; /* shown only at <=900px */
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    background: none;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: 8px 7px;
+    cursor: pointer;
+    z-index: 1010;
+  }
+
+  .hamburger-line {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--uwc-blue);
+    border-radius: 2px;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+
+  /* Animate to X when open */
+  .hamburger-btn.open .hamburger-line:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+  .hamburger-btn.open .hamburger-line:nth-child(2) {
+    opacity: 0;
+  }
+  .hamburger-btn.open .hamburger-line:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+
+  /* Mobile nav overlay — slides down from header */
+  .header-nav.mobile-open {
+    display: flex !important;
+    flex-direction: column;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    padding: var(--space-lg) var(--space-xl);
+    gap: 0;
+    z-index: 1005;
+    border-top: 2px solid var(--uwc-gold);
+    animation: navSlideDown 0.2s ease;
+  }
+
+  @keyframes navSlideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .header-nav.mobile-open .nav-item {
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border-light);
+    border-radius: 0;
+    width: 100%;
+  }
+
+  .header-nav.mobile-open .nav-item:last-of-type {
+    border-bottom: none;
+  }
+
+  .header-nav.mobile-open .header-logged-in {
+    padding: 12px 16px;
+    margin-left: 0;
+    border-top: 1px solid var(--border-light);
+    margin-top: var(--space-sm);
+    font-size: 0.8rem;
+  }
+
+  .header-nav.mobile-open .sign-out-btn {
+    margin-left: 0;
+    margin-top: var(--space-sm);
+    padding: 10px 16px;
+    width: 100%;
+    justify-content: center;
+    font-size: 0.8rem;
+    gap: 8px;
+  }
+
+  /* Mobile nav backdrop (click to close) */
+  .mobile-nav-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 999;
+  }
+
+  .mobile-nav-backdrop.visible {
+    display: block;
+  }
+
+  /* ========================================
      Blue Navigation Strip
      ======================================== */
   .nav-strip {
@@ -2301,8 +2405,13 @@
   }
 
   @media (max-width: 900px) {
+    /* Hide inline nav, show hamburger */
     .header-nav {
       display: none;
+    }
+
+    .hamburger-btn {
+      display: flex;
     }
 
     .footer-content {
@@ -2330,9 +2439,52 @@
       display: none;
     }
 
-    /* Header is shorter when nav is hidden — update sticky top */
+    /* Header is shorter when nav is hidden — update sticky & offset */
+    .nav-strip {
+      margin-top: 92px;
+    }
+
     .dashboard-hero {
       top: 90px;
+    }
+
+    /* Allow header to expand for mobile nav overlay */
+    .header {
+      overflow: visible;
+    }
+
+    /* Reduce chart heights on tablets */
+    .chart-body {
+      height: 180px;
+      max-height: 180px;
+    }
+
+    .devices-content {
+      height: 160px;
+      max-height: 160px;
+    }
+
+    .chart-activity {
+      max-height: 290px;
+    }
+
+    /* Reduce card padding */
+    .chart-card {
+      padding: var(--space-md);
+    }
+
+    .table-body {
+      max-height: 240px;
+    }
+
+    /* Metric cards tighter */
+    .metric-card {
+      padding: var(--space-md);
+      min-height: 95px;
+    }
+
+    .metric-value {
+      font-size: 1.5rem;
     }
   }
 
@@ -2397,11 +2549,89 @@
     .tables-section-3col {
       grid-template-columns: 1fr;
     }
+
+    /* Reduce chart sizes further */
+    .chart-body {
+      height: 160px;
+      max-height: 160px;
+    }
+
+    .activity-chart {
+      height: 80px;
+      max-height: 80px;
+    }
+
+    .devices-content {
+      height: 140px;
+      max-height: 140px;
+    }
+
+    /* Section headers tighter */
+    .section-header {
+      margin-bottom: var(--space-md);
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+    }
+
+    .section-subtitle {
+      font-size: 0.72rem;
+    }
+
+    /* Chart legend wraps */
+    .chart-legend {
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      font-size: 0.65rem;
+    }
+
+    /* Truncate breadcrumbs: hide "UWC Immersive Zone / JigSpace /" */
+    .nav-strip-left > :nth-child(3),
+    .nav-strip-left > :nth-child(4),
+    .nav-strip-left > :nth-child(5),
+    .nav-strip-left > :nth-child(6) {
+      display: none;
+    }
+
+    .nav-strip-left {
+      font-size: 0.8rem;
+      gap: 4px;
+    }
+
+    .nav-strip-right {
+      font-size: 0.8rem;
+    }
+
+    .nav-strip {
+      height: 44px;
+      padding-left: var(--space-md);
+      padding-right: var(--space-md);
+    }
   }
 
   @media (max-width: 600px) {
+    /* Hide date in nav strip on small screens */
+    .nav-strip-right {
+      display: none;
+    }
+
+    /* Also hide "Loggerhead Turtle /" — keep just Home > Analytics Dashboard */
+    .nav-strip-left > :nth-child(7),
+    .nav-strip-left > :nth-child(8) {
+      display: none;
+    }
+
+    .nav-strip {
+      height: 38px;
+    }
+
     .metrics-section {
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-sm);
     }
 
     .hero-content {
@@ -2409,15 +2639,146 @@
       text-align: center;
     }
 
+    .hero-text h1 {
+      font-size: 1.1rem;
+    }
+
     .hero-text h1::before {
       width: 50px;
     }
 
-    /* Smaller header at mobile — update sticky top */
+    .project-subtitle {
+      font-size: 0.72rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* Smaller header at mobile — update sticky top & offset */
+    .nav-strip {
+      margin-top: 74px;
+    }
+
     .dashboard-hero {
       top: 72px;
+      padding-top: var(--space-md);
+      padding-bottom: var(--space-md);
     }
-    
+
+    /* Compact metric cards for 2-col mobile */
+    .metric-card {
+      padding: var(--space-sm) var(--space-md);
+      min-height: 80px;
+      border-radius: var(--radius-md);
+    }
+
+    .metric-value {
+      font-size: 1.25rem;
+    }
+
+    .metric-label {
+      font-size: 0.6rem;
+    }
+
+    .metric-chart {
+      width: 44px;
+      height: 44px;
+    }
+
+    .metric-icon {
+      width: 26px;
+      height: 26px;
+    }
+
+    .metric-icon svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    .metric-change {
+      font-size: 0.6rem;
+    }
+
+    /* Chart cards tighter */
+    .chart-card {
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-md);
+    }
+
+    .chart-header {
+      margin-bottom: var(--space-sm);
+    }
+
+    .chart-header h3 {
+      font-size: 0.85rem;
+    }
+
+    .chart-body {
+      height: 140px;
+      max-height: 140px;
+    }
+
+    .activity-chart {
+      height: 70px;
+      max-height: 70px;
+    }
+
+    .devices-content {
+      height: 120px;
+      max-height: 120px;
+    }
+
+    .chart-activity {
+      max-height: 240px;
+    }
+
+    .chart-devices {
+      max-height: 210px;
+    }
+
+    /* Geo map smaller */
+    .geo-map-canvas {
+      min-height: 160px;
+    }
+
+    /* Tables tighter */
+    .table-card {
+      border-radius: var(--radius-md);
+    }
+
+    .table-header {
+      padding: var(--space-md);
+    }
+
+    .table-body {
+      padding: var(--space-sm);
+      max-height: 220px;
+    }
+
+    th {
+      font-size: 0.62rem;
+      padding: var(--space-xs) var(--space-sm);
+    }
+
+    td {
+      font-size: 0.78rem;
+      padding: var(--space-xs) var(--space-sm);
+    }
+
+    /* Main content tighter */
+    .main-content {
+      padding: var(--space-md) var(--space-md);
+    }
+
+    .charts-section,
+    .tables-section {
+      gap: var(--space-sm);
+      margin-bottom: var(--space-md);
+    }
+
+    .metrics-section {
+      margin-bottom: var(--space-md);
+    }
+
     .footer-content {
       grid-template-columns: 1fr;
       text-align: center;
@@ -2447,11 +2808,11 @@
     .footer-bottom-links {
       justify-content: center;
     }
-    
+
     .side-tab {
       display: none;
     }
-    
+
     .logo {
       height: 45px;
     }
@@ -2459,6 +2820,188 @@
     .btn-view-project {
       font-size: 0.65rem;
       padding: 8px 14px;
+    }
+
+    .btn-export {
+      font-size: 0.65rem;
+      padding: 6px 12px;
+    }
+
+    /* Journey section compact */
+    .journey-node-compact {
+      min-width: 140px;
+      max-width: 200px;
+      padding: var(--space-sm);
+    }
+
+    .journey-node-label {
+      font-size: 0.75rem;
+    }
+
+    .journey-node-sublabel {
+      font-size: 0.6rem;
+    }
+
+    .journey-node-stats {
+      font-size: 0.6rem;
+    }
+
+    .journey-funnel-compact {
+      gap: var(--space-xs);
+    }
+
+    .funnel-label,
+    .funnel-value {
+      font-size: 0.65rem;
+    }
+  }
+
+  /* Very small screens (phones in portrait) */
+  @media (max-width: 480px) {
+    .metrics-section {
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .metric-card {
+      padding: 8px 10px;
+      min-height: 70px;
+    }
+
+    .metric-value {
+      font-size: 1.1rem;
+    }
+
+    .metric-label {
+      font-size: 0.55rem;
+    }
+
+    .metric-chart {
+      width: 36px;
+      height: 36px;
+    }
+
+    .metric-icon {
+      width: 22px;
+      height: 22px;
+    }
+
+    .metric-icon svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    .chart-body {
+      height: 120px;
+      max-height: 120px;
+    }
+
+    .activity-chart {
+      height: 60px;
+      max-height: 60px;
+    }
+
+    .devices-content {
+      height: 100px;
+      max-height: 100px;
+    }
+
+    .chart-activity {
+      max-height: 200px;
+    }
+
+    .chart-devices {
+      max-height: 180px;
+    }
+
+    .geo-map-canvas {
+      min-height: 130px;
+    }
+
+    .hero-text h1 {
+      font-size: 0.95rem;
+    }
+
+    .project-subtitle {
+      font-size: 0.65rem;
+    }
+
+    .dashboard-hero {
+      padding-left: var(--space-md);
+      padding-right: var(--space-md);
+    }
+
+    .header {
+      padding-left: var(--space-md);
+      padding-right: var(--space-md);
+    }
+
+    .nav-strip {
+      padding-left: var(--space-md);
+      padding-right: var(--space-md);
+    }
+
+    .main-content {
+      padding: var(--space-sm) var(--space-sm);
+    }
+
+    .section-header {
+      margin-bottom: var(--space-sm);
+      padding-bottom: var(--space-xs);
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+    }
+
+    .section-subtitle {
+      font-size: 0.65rem;
+    }
+
+    .chart-header h3 {
+      font-size: 0.78rem;
+    }
+
+    .chart-header h3::before {
+      width: 30px;
+      height: 2px;
+    }
+
+    .table-header h3 {
+      font-size: 0.85rem;
+    }
+
+    .table-header h3::before {
+      width: 30px;
+      height: 2px;
+    }
+
+    .period-btn {
+      padding: 5px 9px;
+      font-size: 0.55rem;
+    }
+
+    .sync-date-label {
+      font-size: 0.85rem;
+    }
+
+    .sync-countdown {
+      font-size: 0.75rem;
+      min-width: 90px;
+    }
+
+    .last-updated {
+      font-size: 0.7rem;
+    }
+
+    .breadcrumb-text,
+    .breadcrumb-sep {
+      font-size: 0.65rem;
+    }
+
+    .footer {
+      padding-left: var(--space-md);
+      padding-right: var(--space-md);
     }
   }
 
