@@ -866,7 +866,6 @@
     overflow: hidden;
     border: 1px solid var(--border-light);
     min-height: 110px;
-    will-change: transform;
   }
 
   .metric-card::before {
@@ -879,7 +878,6 @@
     background: var(--gradient-gold);
     opacity: 0;
     transition: opacity 0.2s;
-    will-change: opacity;
   }
 
   .metric-card:hover {
@@ -1080,7 +1078,8 @@
   }
 
   .chart-body canvas {
-    max-height: 100%;
+    width: 100% !important;
+    height: 100% !important;
   }
 
   .chart-body-centered {

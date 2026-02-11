@@ -212,7 +212,24 @@
     });
   }
 
+  // Size a canvas to fill its parent container.
+  // Called once at init — since responsive:false, Chart.js won't auto-resize.
+  function sizeCanvasToParent(canvas) {
+    var parent = canvas.parentElement;
+    if (!parent) return;
+    canvas.width = parent.clientWidth;
+    canvas.height = parent.clientHeight;
+    canvas.style.width = parent.clientWidth + 'px';
+    canvas.style.height = parent.clientHeight + 'px';
+  }
+
   function initializeCharts() {
+    // Size canvases to their containers BEFORE Chart.js init
+    ['timeSeriesChart', 'activityChart', 'devicesChart', 'bounceSparkline'].forEach(function(id) {
+      var c = document.getElementById(id);
+      if (c) sizeCanvasToParent(c);
+    });
+
     // Time Series Chart - Smooth curved lines like reference
     const timeSeriesCtx = document.getElementById('timeSeriesChart').getContext('2d');
 
@@ -269,12 +286,13 @@
         ]
       },
       options: {
-        responsive: true,
+        responsive: false,
         maintainAspectRatio: false,
         interaction: {
           mode: 'index',
           intersect: true
         },
+        animation: false,
         plugins: {
           tooltip: {
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -337,8 +355,9 @@
         }]
       },
       options: {
-        responsive: true,
+        responsive: false,
         maintainAspectRatio: false,
+        animation: false,
         plugins: {
           legend: { display: false },
           tooltip: { enabled: false }
@@ -364,8 +383,9 @@
         }]
       },
       options: {
-        responsive: true,
+        responsive: false,
         maintainAspectRatio: false,
+        animation: false,
         indexAxis: 'y',
         plugins: {
           legend: { display: false },
@@ -413,8 +433,9 @@
           }]
         },
         options: {
-          responsive: true,
+          responsive: false,
           maintainAspectRatio: false,
+          animation: false,
           plugins: { legend: { display: false }, tooltip: { enabled: false } },
           scales: { x: { display: false }, y: { display: false } }
         }
@@ -807,42 +828,39 @@
   }
 
   function updateTimeSeriesChart(data) {
-    var noAnim = { duration: 0 }; // always instant — animations cause compositor stalls
     if (!data.labels || data.labels.length === 0) {
       timeSeriesChart.data.labels = ['No data'];
       timeSeriesChart.data.datasets[0].data = [0];
       timeSeriesChart.data.datasets[1].data = [0];
       timeSeriesChart.data.datasets[2].data = [0];
-      timeSeriesChart.update(noAnim);
+      timeSeriesChart.update('none');
       return;
     }
     timeSeriesChart.data.labels = data.labels;
     timeSeriesChart.data.datasets[0].data = data.users;
     timeSeriesChart.data.datasets[1].data = data.sessions;
     timeSeriesChart.data.datasets[2].data = data.pageViews;
-    timeSeriesChart.update(noAnim);
+    timeSeriesChart.update('none');
   }
 
   function updateActivityChart(data) {
-    var noAnim = { duration: 0 }; // always instant — animations cause compositor stalls
     if (!data.labels || data.labels.length === 0) {
       activityChart.data.labels = ['No data'];
       activityChart.data.datasets[0].data = [0];
-      activityChart.update(noAnim);
+      activityChart.update('none');
       return;
     }
     activityChart.data.labels = data.labels;
     activityChart.data.datasets[0].data = data.users;
-    activityChart.update(noAnim);
+    activityChart.update('none');
   }
 
   function updateDevicesChart(data) {
-    var noAnim = { duration: 0 }; // always instant — animations cause compositor stalls
     if (!data.labels || data.labels.length === 0) {
       devicesChart.data.labels = ['No data'];
       devicesChart.data.datasets[0].data = [0];
       devicesChart.data.datasets[0].backgroundColor = ['#e2e8f0'];
-      devicesChart.update(noAnim);
+      devicesChart.update('none');
       return;
     }
     devicesChart.data.labels = data.labels;
@@ -851,7 +869,7 @@
     const deviceColors = data.labels.map((label, i) => chartColors[i % chartColors.length]);
     devicesChart.data.datasets[0].backgroundColor = deviceColors;
 
-    devicesChart.update(noAnim);
+    devicesChart.update('none');
   }
 
   // Update element HTML — writes instantly, no transitions.
@@ -994,16 +1012,15 @@
   // ========================================
   function updateBounceSparkline(data) {
     if (!bounceSparkline) return;
-    var noAnim = { duration: 0 }; // always instant — animations cause compositor stalls
     if (!data || !data.labels || data.labels.length === 0) {
       bounceSparkline.data.labels = ['No data'];
       bounceSparkline.data.datasets[0].data = [0];
-      bounceSparkline.update(noAnim);
+      bounceSparkline.update('none');
       return;
     }
     bounceSparkline.data.labels = data.labels;
     bounceSparkline.data.datasets[0].data = data.bounceRates;
-    bounceSparkline.update(noAnim);
+    bounceSparkline.update('none');
   }
 
   // ========================================
@@ -2271,96 +2288,72 @@
   });
 
   // ========================================
-  // Canvas Recovery Watchdog
+  // Canvas Context-Loss Recovery
   // ========================================
-  // When Chrome's compositor crashes (GPU process hiccup), <canvas> elements
-  // lose their pixel data — they go blank.  Chart.js doesn't know this
-  // happened and won't repaint.
+  // Instead of polling with getImageData() (expensive GPU→CPU readback),
+  // we listen for the browser's native 'contextlost' / 'contextrestored'
+  // events.  When Chrome's compositor crashes, canvases fire contextlost.
+  // On contextrestored we schedule a staggered redraw.
   //
-  // CRITICAL: Recovery must be STAGGERED — recovering all 5 canvases in one
-  // batch is the exact same GPU storm that caused the crash.  Instead we
-  // recover ONE canvas per watchdog tick (every 3s), cycling through them.
+  // As a fallback for browsers that don't fire these events, a lightweight
+  // visibility-change handler re-renders when the tab becomes visible.
   (function() {
-    var WATCHDOG_INTERVAL = 3000; // check one canvas every 3s
-    var _watchdogIndex = 0;      // round-robin pointer
+    // Bind context-loss handlers on all chart canvases
+    function bindContextRecovery(canvasId, recoverFn) {
+      var canvas = document.getElementById(canvasId);
+      if (!canvas) return;
 
-    function isCanvasBlank(canvas) {
-      if (!canvas || !canvas.width || !canvas.height) return true;
-      try {
-        var ctx = canvas.getContext('2d');
-        // Sample a small strip from the middle of the canvas
-        var y = Math.floor(canvas.height / 2);
-        var data = ctx.getImageData(0, y, canvas.width, 1).data;
-        // Check if every pixel is transparent (all zeros)
-        for (var i = 3; i < data.length; i += 4) {
-          if (data[i] !== 0) return false; // found a non-transparent pixel
-        }
-        return true; // all transparent — canvas is blank
-      } catch (e) {
-        return false; // cross-origin or security error, assume not blank
-      }
+      canvas.addEventListener('contextlost', function(e) {
+        console.warn('[ContextLost]', canvasId);
+        e.preventDefault(); // tells browser we will handle restoration
+      });
+
+      canvas.addEventListener('contextrestored', function() {
+        console.warn('[ContextRestored] Recovering', canvasId);
+        try { recoverFn(); } catch (err) {}
+      });
     }
 
-    function chartHasData(inst) {
-      return inst && inst.data && inst.data.datasets && inst.data.datasets[0] &&
-             inst.data.datasets[0].data && inst.data.datasets[0].data.length > 0 &&
-             !(inst.data.datasets[0].data.length === 1 && inst.data.datasets[0].data[0] === 0);
-    }
-
-    // Each entry: { check, recover } — one per canvas type
-    var watchdogTargets = [
-      {
-        check: function() { return timeSeriesChart && chartHasData(timeSeriesChart) && isCanvasBlank(timeSeriesChart.canvas); },
-        recover: function() { console.warn('[Watchdog] Recovering timeSeriesChart'); timeSeriesChart.update({ duration: 0 }); }
-      },
-      {
-        check: function() { return activityChart && chartHasData(activityChart) && isCanvasBlank(activityChart.canvas); },
-        recover: function() { console.warn('[Watchdog] Recovering activityChart'); activityChart.update({ duration: 0 }); }
-      },
-      {
-        check: function() { return devicesChart && chartHasData(devicesChart) && isCanvasBlank(devicesChart.canvas); },
-        recover: function() { console.warn('[Watchdog] Recovering devicesChart'); devicesChart.update({ duration: 0 }); }
-      },
-      {
-        check: function() { return bounceSparkline && chartHasData(bounceSparkline) && isCanvasBlank(bounceSparkline.canvas); },
-        recover: function() { console.warn('[Watchdog] Recovering bounceSparkline'); bounceSparkline.update({ duration: 0 }); }
-      },
-      {
-        check: function() {
-          var gc = document.getElementById('geoMapCanvas');
-          return gc && geoCanvasReady && gc._countryMap && Object.keys(gc._countryMap).length > 0 && isCanvasBlank(gc);
-        },
-        recover: function() {
-          console.warn('[Watchdog] Recovering geo map');
-          var gc = document.getElementById('geoMapCanvas');
+    // Defer binding until charts are initialized (DOMContentLoaded + small delay)
+    setTimeout(function() {
+      bindContextRecovery('timeSeriesChart', function() {
+        if (timeSeriesChart) timeSeriesChart.update('none');
+      });
+      bindContextRecovery('activityChart', function() {
+        if (activityChart) activityChart.update('none');
+      });
+      bindContextRecovery('devicesChart', function() {
+        if (devicesChart) devicesChart.update('none');
+      });
+      bindContextRecovery('bounceSparkline', function() {
+        if (bounceSparkline) bounceSparkline.update('none');
+      });
+      bindContextRecovery('geoMapCanvas', function() {
+        var gc = document.getElementById('geoMapCanvas');
+        if (gc && geoCanvasReady && gc._countryMap) {
           _drawGeoCanvasImmediate(gc, gc._countryMap, gc._maxUsers || 0);
         }
-      }
-    ];
+      });
+    }, 3000);
 
-    function watchdogTick() {
-      // Check ONE target per tick — round-robin through all 5
-      var target = watchdogTargets[_watchdogIndex];
-      _watchdogIndex = (_watchdogIndex + 1) % watchdogTargets.length;
-      try {
-        if (target.check()) {
-          target.recover();
-        }
-      } catch (e) {
-        // Never let the watchdog itself crash
-      }
-    }
-
-    setInterval(watchdogTick, WATCHDOG_INTERVAL);
-
-    // On tab-visible: stagger recovery with 500ms gaps (not all at once)
+    // Fallback: on tab-visible, stagger one redraw per canvas with gaps.
+    // No getImageData — just force a redraw if we have data.
     document.addEventListener('visibilitychange', function() {
-      if (!document.hidden) {
-        watchdogTargets.forEach(function(target, idx) {
-          setTimeout(function() {
-            try { if (target.check()) target.recover(); } catch (e) {}
-          }, (idx + 1) * 500);
-        });
-      }
+      if (document.hidden) return;
+      var recoveries = [
+        function() { if (timeSeriesChart) timeSeriesChart.update('none'); },
+        function() { if (activityChart) activityChart.update('none'); },
+        function() { if (devicesChart) devicesChart.update('none'); },
+        function() { if (bounceSparkline) bounceSparkline.update('none'); },
+        function() {
+          var gc = document.getElementById('geoMapCanvas');
+          if (gc && geoCanvasReady && gc._countryMap) {
+            _drawGeoCanvasImmediate(gc, gc._countryMap, gc._maxUsers || 0);
+          }
+        }
+      ];
+      recoveries.forEach(function(fn, idx) {
+        setTimeout(function() { try { fn(); } catch (e) {} }, (idx + 1) * 600);
+      });
     });
   })();
