@@ -18,9 +18,9 @@ const ALLOWED_ORIGINS = [
 // Actions whose responses are identical for all authenticated users
 // and safe to serve from cache without per-request auth.
 const CACHEABLE_ACTIONS = new Set(['fetchAllDashboardData']);
-// TTL longer than the client's 120s sync interval so the cache is still
-// warm when the next refresh fires.  120s sync + 30s buffer = 150s.
-const CACHE_TTL_SECONDS = 150;
+// TTL longer than the client's 300s (5min) sync interval so the cache
+// is still warm when the next refresh fires.  300s sync + 60s buffer.
+const CACHE_TTL_SECONDS = 360;
 
 function getCorsOrigin(request, env) {
   var origin = request.headers.get('Origin') || '';

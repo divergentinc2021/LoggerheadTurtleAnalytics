@@ -59,7 +59,7 @@
   var renderDelayTimer = null;
 
   // Auto-refresh config
-  const SYNC_INTERVAL = 120; // seconds between data refreshes
+  const SYNC_INTERVAL = 300; // 5 minutes — GA4 has ~4-8min processing latency
   let syncCountdown = SYNC_INTERVAL;
   let syncTimer = null;
   let deploymentVersion = null; // tracks current deployment version
@@ -1970,7 +1970,15 @@
     // Only touch DOM when the value actually changed
     if (fill.style.width !== newWidth) fill.style.width = newWidth;
 
-    var newText = syncCountdown <= 0 ? 'Syncing...' : 'Next sync in ' + syncCountdown + 's';
+    var newText;
+    if (syncCountdown <= 0) {
+      newText = 'Syncing...';
+    } else if (syncCountdown >= 60) {
+      var mins = Math.ceil(syncCountdown / 60);
+      newText = 'Next sync in ' + mins + 'min';
+    } else {
+      newText = 'Next sync in ' + syncCountdown + 's';
+    }
     if (label.textContent !== newText) label.textContent = newText;
   }
 
