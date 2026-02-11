@@ -430,11 +430,6 @@
   }
 
   function handleDashboardData(data) {
-    // On refresh (not first load), skip per-element transitions to avoid
-    // 50+ simultaneous opacity animations that overwhelm the browser.
-    // Instead, all update functions check _refreshUpdate and write instantly.
-    window._refreshUpdate = !isFirstLoad;
-
     try {
       showLoading(false);
       hidePreloader();
@@ -508,10 +503,8 @@
 
       // Update "Last Updated" timestamp
       updateLastUpdated();
-    } finally {
-      // Always clear the refresh flag — even if an update function throws,
-      // subsequent calls must not stay stuck in instant-mode forever.
-      window._refreshUpdate = false;
+    } catch(e) {
+      console.error('[Dashboard] Update error:', e);
     }
   }
 
@@ -546,18 +539,19 @@
 
   var preloaderHidden = false;
   function hidePreloader() {
-    if (preloaderHidden) return; // only run once
+    if (preloaderHidden) return;
     preloaderHidden = true;
-    var progress = document.getElementById('preloaderProgress');
     var overlay = document.getElementById('preloaderOverlay');
-    if (progress) progress.classList.add('complete');
-    setTimeout(function() {
-      if (overlay) {
-        overlay.classList.add('hidden');
-        // Remove from DOM entirely after fade-out to free resources
-        setTimeout(function() { overlay.remove(); }, 600);
-      }
-    }, 400);
+    if (!overlay) return;
+    // Listen for the CSS transition end, then remove from DOM cleanly.
+    // No cascading timeouts — the browser tells us when it's done.
+    overlay.addEventListener('transitionend', function onEnd() {
+      overlay.removeEventListener('transitionend', onEnd);
+      overlay.remove();
+    });
+    // Fallback: if transitionend never fires, remove after 1s
+    setTimeout(function() { if (overlay.parentNode) overlay.remove(); }, 1000);
+    overlay.classList.add('hidden');
   }
 
   // ========================================
@@ -573,29 +567,14 @@
     }
   }
 
-  // Smoothly update a text element — only animate if value actually changed
+  // Update a text element — writes instantly, no transitions.
+  // Per-element opacity fades (50+ simultaneous) caused compositor crashes.
+  // The preloader covers the first load; refreshes update in-place.
   function smoothSetText(id, newText) {
     var el = document.getElementById(id);
     if (!el) return;
-    if (el.textContent === newText) return; // no change
-    // Kill any pending timer from a previous call first
-    if (el._smoothTimer) { clearTimeout(el._smoothTimer); el._smoothTimer = null; }
-    // On refresh: write instantly (no per-element transition)
-    if (window._refreshUpdate) {
-      el.style.removeProperty('transition');
-      el.style.removeProperty('opacity');
-      el.textContent = newText;
-      return;
-    }
-    // First load: use smooth transition
-    el.style.transition = 'opacity 0.2s ease';
-    el.style.opacity = '0.3';
-    el._smoothTimer = setTimeout(function() {
-      el.textContent = newText;
-      el.style.removeProperty('transition');
-      el.style.removeProperty('opacity');
-      el._smoothTimer = null;
-    }, 200);
+    if (el.textContent === newText) return;
+    el.textContent = newText;
   }
 
   function updateMetrics(metrics) {
@@ -686,7 +665,7 @@
   }
 
   function updateTimeSeriesChart(data) {
-    var noAnim = window._refreshUpdate ? { duration: 0 } : undefined;
+    var noAnim = { duration: 0 }; // always instant — animations cause compositor stalls
     if (!data.labels || data.labels.length === 0) {
       timeSeriesChart.data.labels = ['No data'];
       timeSeriesChart.data.datasets[0].data = [0];
@@ -703,7 +682,7 @@
   }
 
   function updateActivityChart(data) {
-    var noAnim = window._refreshUpdate ? { duration: 0 } : undefined;
+    var noAnim = { duration: 0 }; // always instant — animations cause compositor stalls
     if (!data.labels || data.labels.length === 0) {
       activityChart.data.labels = ['No data'];
       activityChart.data.datasets[0].data = [0];
@@ -716,7 +695,7 @@
   }
 
   function updateDevicesChart(data) {
-    var noAnim = window._refreshUpdate ? { duration: 0 } : undefined;
+    var noAnim = { duration: 0 }; // always instant — animations cause compositor stalls
     if (!data.labels || data.labels.length === 0) {
       devicesChart.data.labels = ['No data'];
       devicesChart.data.datasets[0].data = [0];
@@ -733,29 +712,12 @@
     devicesChart.update(noAnim);
   }
 
-  // Graceful table update — fades old content out, swaps HTML, fades in
+  // Update element HTML — writes instantly, no transitions.
+  // Per-element opacity fades caused compositor crashes on both first load and refresh.
   function fadeUpdateElement(el, newHTML) {
     if (!el) return;
-    // If content hasn't changed, skip the update entirely
     if (el.innerHTML.trim() === newHTML.trim()) return;
-    // Kill any pending timer from a previous call first
-    if (el._fadeTimer) { clearTimeout(el._fadeTimer); el._fadeTimer = null; }
-    // On refresh: write instantly (no per-element fade)
-    if (window._refreshUpdate) {
-      el.style.removeProperty('transition');
-      el.style.removeProperty('opacity');
-      el.innerHTML = newHTML;
-      return;
-    }
-    // First load: use fade transition
-    el.style.transition = 'opacity 0.25s ease';
-    el.style.opacity = '0.3';
-    el._fadeTimer = setTimeout(function() {
-      el.innerHTML = newHTML;
-      el.style.removeProperty('transition');
-      el.style.removeProperty('opacity');
-      el._fadeTimer = null;
-    }, 250);
+    el.innerHTML = newHTML;
   }
 
   function updateTopPagesTable(pages) {
@@ -890,7 +852,7 @@
   // ========================================
   function updateBounceSparkline(data) {
     if (!bounceSparkline) return;
-    var noAnim = window._refreshUpdate ? { duration: 0 } : undefined;
+    var noAnim = { duration: 0 }; // always instant — animations cause compositor stalls
     if (!data || !data.labels || data.labels.length === 0) {
       bounceSparkline.data.labels = ['No data'];
       bounceSparkline.data.datasets[0].data = [0];
@@ -1076,17 +1038,27 @@
     return '#0a1a5c';                              // deep navy
   }
 
-  // Draw entire map to canvas — pure pixel work, zero DOM manipulation
+  // Draw entire map to canvas — pure pixel work, zero DOM manipulation.
+  // Debounced via rAF so rapid-fire refresh calls only paint once per frame.
+  var _geoDrawRaf = 0;
   function drawGeoCanvas(canvas, countryMap, maxUsers) {
+    // Always store the latest data so the tooltip stays correct
+    canvas._countryMap = countryMap;
+    canvas._maxUsers = maxUsers;
+
+    if (_geoDrawRaf) cancelAnimationFrame(_geoDrawRaf);
+    _geoDrawRaf = requestAnimationFrame(function() {
+      _geoDrawRaf = 0;
+      _drawGeoCanvasImmediate(canvas, countryMap, maxUsers);
+    });
+  }
+
+  function _drawGeoCanvasImmediate(canvas, countryMap, maxUsers) {
     var ctx = canvas.getContext('2d');
     var w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
     if (!geoCountryPaths) return;
-
-    // Store current countryMap on the canvas element for tooltip hit-testing
-    canvas._countryMap = countryMap;
-    canvas._maxUsers = maxUsers;
 
     for (var i = 0; i < geoCountryPaths.length; i++) {
       var country = geoCountryPaths[i];
@@ -1163,21 +1135,34 @@
       return null;
     }
 
+    // Throttle mousemove to ~20fps using rAF — unthrottled mousemove
+    // fires 60+/sec, each calling getBoundingClientRect() twice which
+    // forces layout reflows and starves the main thread.
+    var _geoRafPending = false;
     canvas.addEventListener('mousemove', function(e) {
-      var pt = getCanvasPoint(e);
-      var hit = findCountry(pt.x, pt.y);
-      if (hit) {
-        var users = (canvas._countryMap || {})[hit.name] || 0;
-        tooltip.innerHTML = '<span class="geo-tooltip-country">' + escapeHtml(hit.name) + '</span><span class="geo-tooltip-value">' + formatNumber(users) + ' users</span>';
-        tooltip.style.display = 'block';
-        var cRect = container.getBoundingClientRect();
-        tooltip.style.left = (e.clientX - cRect.left + 10) + 'px';
-        tooltip.style.top = (e.clientY - cRect.top - 30) + 'px';
-        canvas.style.cursor = 'pointer';
-      } else {
-        tooltip.style.display = 'none';
-        canvas.style.cursor = 'default';
-      }
+      if (_geoRafPending) return;
+      _geoRafPending = true;
+      var clientX = e.clientX, clientY = e.clientY;
+      requestAnimationFrame(function() {
+        _geoRafPending = false;
+        var rect = canvas.getBoundingClientRect();
+        var scaleX = canvas.width / rect.width;
+        var scaleY = canvas.height / rect.height;
+        var px = (clientX - rect.left) * scaleX;
+        var py = (clientY - rect.top) * scaleY;
+        var hit = findCountry(px, py);
+        if (hit) {
+          var users = (canvas._countryMap || {})[hit.name] || 0;
+          tooltip.innerHTML = '<span class="geo-tooltip-country">' + escapeHtml(hit.name) + '</span><span class="geo-tooltip-value">' + formatNumber(users) + ' users</span>';
+          tooltip.style.display = 'block';
+          tooltip.style.left = (clientX - rect.left + 10) + 'px';
+          tooltip.style.top = (clientY - rect.top - 30) + 'px';
+          canvas.style.cursor = 'pointer';
+        } else {
+          tooltip.style.display = 'none';
+          canvas.style.cursor = 'default';
+        }
+      });
     });
 
     canvas.addEventListener('mouseleave', function() {
@@ -1384,7 +1369,16 @@
       try { if (activityChart && activityChart.canvas) chartImgs.activity = activityChart.toBase64Image(); } catch(e) {}
       try { if (devicesChart && devicesChart.canvas) chartImgs.devices = devicesChart.toBase64Image(); } catch(e) {}
       try { if (bounceSparkline && bounceSparkline.canvas) chartImgs.bounce = bounceSparkline.toBase64Image(); } catch(e) {}
-      try { var gc = document.getElementById('geoMapCanvas'); if (gc) chartImgs.geoMap = gc.toDataURL('image/png'); } catch(e) {}
+      try {
+        var gc = document.getElementById('geoMapCanvas');
+        // Flush any pending rAF-deferred geo draw so the snapshot is current
+        if (gc && _geoDrawRaf) {
+          cancelAnimationFrame(_geoDrawRaf);
+          _geoDrawRaf = 0;
+          if (gc._countryMap) _drawGeoCanvasImmediate(gc, gc._countryMap, gc._maxUsers || 0);
+        }
+        if (gc) chartImgs.geoMap = gc.toDataURL('image/png');
+      } catch(e) {}
 
       // Date range from cached data
       var dr = data.overview && data.overview.dateRange;
@@ -1897,13 +1891,12 @@
     if (!fill || !label) return;
 
     var pct = ((SYNC_INTERVAL - syncCountdown) / SYNC_INTERVAL) * 100;
-    fill.style.width = pct + '%';
+    var newWidth = pct + '%';
+    // Only touch DOM when the value actually changed
+    if (fill.style.width !== newWidth) fill.style.width = newWidth;
 
-    if (syncCountdown <= 0) {
-      label.textContent = 'Syncing...';
-    } else {
-      label.textContent = 'Next sync in ' + syncCountdown + 's';
-    }
+    var newText = syncCountdown <= 0 ? 'Syncing...' : 'Next sync in ' + syncCountdown + 's';
+    if (label.textContent !== newText) label.textContent = newText;
   }
 
   function resetSyncCountdown() {

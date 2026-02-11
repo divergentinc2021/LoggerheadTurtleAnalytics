@@ -533,7 +533,8 @@
     background: var(--uwc-gold);
     border-radius: 2px;
     width: 0%;
-    transition: width 1s linear;
+    /* No CSS transition — JS updates width every 1s tick, stacking 1s
+       CSS transitions on top caused compositor stalls / blackouts. */
   }
 
   .sync-countdown {
