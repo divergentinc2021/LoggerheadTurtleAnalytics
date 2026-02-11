@@ -2170,7 +2170,9 @@
     font-weight: 500;
     color: var(--text-secondary);
     white-space: nowrap;
-    min-width: 140px;
+    min-width: clamp(80px, 18vw, 140px);
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .funnel-value {
@@ -2188,7 +2190,7 @@
   .chart-journey-inline {
     display: flex;
     flex-direction: column;
-    max-height: 340px;
+    max-height: none;
   }
 
   .journey-flow-compact {
@@ -2292,7 +2294,7 @@
 
   .journey-funnel-compact .funnel-label {
     font-size: 0.65rem;
-    min-width: 100px;
+    min-width: 0;
   }
 
   .journey-funnel-compact .funnel-value {
