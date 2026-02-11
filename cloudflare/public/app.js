@@ -2170,15 +2170,17 @@
   // ========================================
   // Zone Freeze — only activate visible sections
   // ========================================
-  // Sections outside the viewport have transitions/animations/pointer-events
-  // disabled via CSS (:not(.zone-active)).  This observer adds .zone-active
-  // only to sections currently visible, drastically reducing compositor work.
+  // Sections outside the viewport have pointer-events disabled via CSS
+  // (:not(.zone-active)).  This observer adds .zone-active only to
+  // sections currently visible, reducing compositor work.
+  // NOTE: We only observe top-level sections (metrics, charts, tables),
+  // NOT individual .chart-card elements — observing chart-cards caused
+  // intersection toggle loops that crashed the renderer.
   document.addEventListener('DOMContentLoaded', function() {
     var sections = document.querySelectorAll(
       '#dashboardContent .metrics-section, ' +
       '#dashboardContent .charts-section, ' +
-      '#dashboardContent .tables-section, ' +
-      '#dashboardContent .chart-card.chart-geo-map'
+      '#dashboardContent .tables-section'
     );
     if (!sections.length) return;
 
@@ -2191,8 +2193,8 @@
         }
       }
     }, {
-      // Activate slightly before entering viewport (100px margin)
-      rootMargin: '100px 0px',
+      // Activate slightly before entering viewport (200px margin)
+      rootMargin: '200px 0px',
       threshold: 0
     });
 
