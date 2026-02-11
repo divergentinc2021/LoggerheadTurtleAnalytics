@@ -194,7 +194,18 @@
         buttons.forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         currentPeriod = this.dataset.period;
-        loadDashboardData(currentPeriod);
+
+        // If we already have client-side cached data for this period
+        // (from pre-warm or a previous visit), render instantly from
+        // memory instead of waiting for a network round-trip.
+        if (cachedData[currentPeriod]) {
+          dataFingerprints = {}; // clear so hasDataChanged returns true
+          handleDashboardData(cachedData[currentPeriod]);
+          // Still fetch fresh data in background to keep cache warm
+          loadDashboardData(currentPeriod);
+        } else {
+          loadDashboardData(currentPeriod);
+        }
       });
     });
   }
@@ -412,6 +423,10 @@
   // ========================================
   // Data Loading — with caching & graceful refresh
   // ========================================
+  // All period keys the dashboard supports
+  var ALL_PERIODS = ['DAU', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+  var kvPreWarmed = false; // only pre-warm once per session
+
   async function loadDashboardData(period) {
     // Prevent overlapping fetches — if one is already in flight, skip
     if (isFetching) {
@@ -436,6 +451,8 @@
         // First load: render immediately — user is waiting on the preloader
         handleDashboardData(data);
         isFirstLoad = false;
+        // Pre-warm KV for the other 3 periods in background
+        preWarmOtherPeriods(period);
       } else {
         // Auto-refresh: delay render by 4s (debounced).  If another fetch
         // completes before the timer fires, the timer resets — only the
@@ -462,105 +479,143 @@
     }
   }
 
+  // Pre-warm KV cache for all periods the user hasn't loaded yet.
+  // Fires one request per period with a 2s stagger so we don't slam
+  // Apps Script with 3 simultaneous requests.  The Worker proxy caches
+  // each response in KV, so subsequent period switches are instant edge reads.
+  function preWarmOtherPeriods(loadedPeriod) {
+    if (kvPreWarmed) return;
+    kvPreWarmed = true;
+    var remaining = ALL_PERIODS.filter(function(p) { return p !== loadedPeriod; });
+    remaining.forEach(function(period, idx) {
+      setTimeout(function() {
+        console.log('[PreWarm] Warming KV for period:', period);
+        // Fire-and-forget — we don't render this data, just let the Worker cache it
+        callAPI('fetchAllDashboardData', { period: period })
+          .then(function(data) {
+            cachedData[period] = data; // also cache client-side for instant switching
+            console.log('[PreWarm] Cached:', period);
+          })
+          .catch(function(e) {
+            console.warn('[PreWarm] Failed for', period, e);
+          });
+      }, (idx + 1) * 2000); // 2s, 4s, 6s stagger
+    });
+  }
+
+  // ── Staggered rendering ──
+  // When all data sections change at once (period switch), updating every
+  // chart + table in a single call-stack overwhelms the GPU compositor.
+  // Instead, we queue each expensive update as a separate rAF-deferred
+  // job so the browser can paint between them.
+  var _renderQueue = [];
+  var _renderRunning = false;
+
+  function enqueueRender(fn) {
+    _renderQueue.push(fn);
+    if (!_renderRunning) {
+      _renderRunning = true;
+      requestAnimationFrame(drainRenderQueue);
+    }
+  }
+
+  function drainRenderQueue() {
+    if (_renderQueue.length === 0) {
+      _renderRunning = false;
+      return;
+    }
+    // Run ONE job per frame to keep each frame lightweight
+    var job = _renderQueue.shift();
+    try { job(); } catch (e) { console.error('[Render] job error:', e); }
+    requestAnimationFrame(drainRenderQueue);
+  }
+
   function handleDashboardData(data) {
     try {
       showLoading(false);
       hidePreloader();
       resetSyncCountdown();
 
-      // Log API response for debugging data issues
       console.log('[Dashboard] API response received:', Object.keys(data));
 
-      // Each section is guarded by hasDataChanged() — if the API returned
-      // identical data, the update function is skipped entirely.  This avoids
-      // unnecessary chart redraws, table rebuilds, and geo map repaints on the
-      // typical 60-second auto-refresh where nothing changed.
-
+      // ── Frame 0: cheap text-only updates (no canvas work) ──
+      // These are instant textContent writes, safe to batch together.
       if (data.overview && data.overview.success) {
         if (hasDataChanged('overview', data.overview)) {
           updateMetrics(data.overview.data);
           updateDateRange(data.overview.dateRange);
         }
-      } else {
-        console.warn('[Dashboard] Overview failed:', data.overview);
       }
+
+      if (data.realtime) {
+        updateRealtimeBadge(data.realtime);
+      }
+
+      updateLastUpdated();
+      updateCacheSourceBadge();
+
+      // ── Frames 1-N: expensive chart/table updates, one per frame ──
+      // Clear any stale queue from a previous render cycle
+      _renderQueue = [];
 
       if (data.timeSeries && data.timeSeries.success) {
         if (hasDataChanged('timeSeries', data.timeSeries)) {
-          updateTimeSeriesChart(data.timeSeries.data);
-          updateActivityChart(data.timeSeries.data);
+          var tsData = data.timeSeries.data;
+          enqueueRender(function() { updateTimeSeriesChart(tsData); });
+          enqueueRender(function() { updateActivityChart(tsData); });
         }
-      } else {
-        console.warn('[Dashboard] TimeSeries failed:', data.timeSeries);
       }
 
       if (data.devices && data.devices.success) {
         if (hasDataChanged('devices', data.devices)) {
-          updateDevicesChart(data.devices.data);
+          var devData = data.devices.data;
+          enqueueRender(function() { updateDevicesChart(devData); });
         }
-      } else {
-        console.warn('[Dashboard] Devices failed:', data.devices);
-      }
-
-      if (data.topPages && data.topPages.success) {
-        if (hasDataChanged('topPages', data.topPages)) {
-          updateTopPagesTable(data.topPages.data);
-        }
-      } else {
-        console.warn('[Dashboard] TopPages failed:', data.topPages);
-      }
-
-      if (data.countries && data.countries.success) {
-        if (hasDataChanged('countries', data.countries)) {
-          updateCountriesTable(data.countries.data);
-          updateGeoMap(data.countries.data);
-        }
-      } else {
-        console.warn('[Dashboard] Countries failed:', data.countries);
-      }
-
-      if (data.events && data.events.success) {
-        if (hasDataChanged('events', data.events)) {
-          updateEventsTable(data.events.data);
-        }
-      } else {
-        console.warn('[Dashboard] Events failed:', data.events);
-      }
-
-      if (data.trafficSources && data.trafficSources.success) {
-        if (hasDataChanged('trafficSources', data.trafficSources)) {
-          updateTrafficSourcesTable(data.trafficSources.data);
-        }
-      } else {
-        console.warn('[Dashboard] TrafficSources failed:', data.trafficSources);
       }
 
       if (data.bounceTimeSeries && data.bounceTimeSeries.success) {
         if (hasDataChanged('bounceTimeSeries', data.bounceTimeSeries)) {
-          updateBounceSparkline(data.bounceTimeSeries.data);
+          var bData = data.bounceTimeSeries.data;
+          enqueueRender(function() { updateBounceSparkline(bData); });
         }
-      } else {
-        console.warn('[Dashboard] BounceTimeSeries failed:', data.bounceTimeSeries);
       }
 
-      // Realtime badge — always update (cheap single textContent write, live count)
-      if (data.realtime) {
-        updateRealtimeBadge(data.realtime);
-      } else {
-        console.warn('[Dashboard] Realtime failed:', data.realtime);
+      if (data.topPages && data.topPages.success) {
+        if (hasDataChanged('topPages', data.topPages)) {
+          var tpData = data.topPages.data;
+          enqueueRender(function() { updateTopPagesTable(tpData); });
+        }
+      }
+
+      if (data.countries && data.countries.success) {
+        if (hasDataChanged('countries', data.countries)) {
+          var cData = data.countries.data;
+          enqueueRender(function() { updateCountriesTable(cData); });
+          enqueueRender(function() { updateGeoMap(cData); });
+        }
+      }
+
+      if (data.events && data.events.success) {
+        if (hasDataChanged('events', data.events)) {
+          var evData = data.events.data;
+          enqueueRender(function() { updateEventsTable(evData); });
+        }
+      }
+
+      if (data.trafficSources && data.trafficSources.success) {
+        if (hasDataChanged('trafficSources', data.trafficSources)) {
+          var trData = data.trafficSources.data;
+          enqueueRender(function() { updateTrafficSourcesTable(trData); });
+        }
       }
 
       if (data.pageFlow && data.pageFlow.success) {
         if (hasDataChanged('pageFlow', data.pageFlow)) {
-          updateJourneyFlow(data.pageFlow.data, data.events ? data.events.data : []);
+          var pfData = data.pageFlow.data;
+          var pfEvents = data.events ? data.events.data : [];
+          enqueueRender(function() { updateJourneyFlow(pfData, pfEvents); });
         }
-      } else {
-        console.warn('[Dashboard] PageFlow failed:', data.pageFlow);
       }
-
-      // Always update — timestamp and cache source should reflect latest fetch
-      updateLastUpdated();
-      updateCacheSourceBadge();
     } catch(e) {
       console.error('[Dashboard] Update error:', e);
     }
