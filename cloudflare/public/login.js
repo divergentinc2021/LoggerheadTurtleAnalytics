@@ -61,6 +61,8 @@
       setTimeout(function() {
         if (loginPage) loginPage.style.display = '';
         if (preloader) preloader.classList.add('hidden');
+        // Signal that login page is visible (PWA popup waits for this)
+        window.loginReady = true;
         // Remove preloader from DOM after transition
         setTimeout(function() {
           if (preloader && preloader.parentNode) preloader.parentNode.removeChild(preloader);
@@ -374,12 +376,24 @@
     var deferredPrompt = null;
     var installDismissed = false;
 
+    // Wait for login page to be visible before showing install popup
+    function showAfterReady(delay) {
+      function check() {
+        if (window.loginReady) {
+          setTimeout(showInstallPopup, delay);
+        } else {
+          setTimeout(check, 300);
+        }
+      }
+      check();
+    }
+
     // Capture beforeinstallprompt (Android / Desktop Chrome)
     window.addEventListener('beforeinstallprompt', function(e) {
       e.preventDefault();
       deferredPrompt = e;
       if (!installDismissed && !sessionStorage.getItem('pwa-install-dismissed')) {
-        setTimeout(showInstallPopup, 2000);
+        showAfterReady(1500);
       }
     });
 
@@ -395,9 +409,7 @@
     // Show install popup on iOS
     if (isIOS() && !isInStandaloneMode()) {
       if (!sessionStorage.getItem('pwa-install-dismissed')) {
-        window.addEventListener('load', function() {
-          setTimeout(showInstallPopup, 3000);
-        });
+        showAfterReady(2000);
       }
     }
 
